@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/cv_framework.iml" filepath="$PROJECT_DIR$/.idea/cv_framework.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../yolov5-6.2/.idea/yolov5-6.2.iml" filepath="$PROJECT_DIR$/../yolov5-6.2/.idea/yolov5-6.2.iml" />
     </modules>
   </component>
 </project>

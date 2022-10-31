@@ -1,0 +1,21 @@
+project: demo
+net: renet
+net_type: classification
+classes: 2
+pretrain: weights/
+test: xxx/data/test
+train: xxx/data/train
+image_w: 228
+image_h: 228
+batch_size: 64
+start_epoch: 0
+epochs: 2000
+resume: False
+device: gpu
+worker: 8
+seed: 0
+lr: 0.001
+loss: focal_loss
+threshold: 0.5
+augment: demo/augment_config.yaml
+
