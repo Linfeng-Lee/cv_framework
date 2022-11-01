@@ -179,7 +179,7 @@ class Model:
 
         logger.info(f'🚀 {self.args.net} start train.')
 
-        self.trainer.resume(self.args.resume, True)
+        self.trainer.resume(self.args.resume, strict=True)
 
         self.trainer.fit(start_epoch=self.args.start_epoch,
                          epochs=self.args.epochs,

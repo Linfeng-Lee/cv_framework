@@ -53,14 +53,29 @@ class EmbeddingTrainer(abc.ABC):
                      pretrained=False,
                      **kwargs):
         self.args = kwargs["args"]
-        self.model_ = self.create_model(model_names, pretrained, embedding_classes=classes).cuda(gpus)
+
+        self.model_ = self.create_model(model_names,
+                                        pretrained,
+                                        embedding_classes=classes).cuda(gpus)
+
         self.optimizer_ = self.define_optimizer(lr)
-        self.train_loader_ = self.define_loader(train_data_path, train_transforms, batch_size=batch_size,
-                                                num_workers=workers, shuffle=True)
-        self.val_loader_ = self.define_loader(val_data_path, val_transforms, batch_size=batch_size, num_workers=workers,
+
+        self.train_loader_ = self.define_loader(train_data_path,
+                                                train_transforms,
+                                                batch_size=batch_size,
+                                                num_workers=workers,
+                                                shuffle=True)
+
+        self.val_loader_ = self.define_loader(val_data_path,
+                                              val_transforms,
+                                              batch_size=batch_size,
+                                              num_workers=workers,
                                               shuffle=True)
+
         self.criterion = self.define_criterion(criterion_list, gpus)
-        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
+
+        self.writer = self.define_scalar(tensorboard_save_path,
+                                         comment=self.optimizer_.__module__)
 
         self.center_loss = CenterLoss(num_classes=classes, feat_dim=1024)
         self.center_loss_weight = 0.5
@@ -77,6 +92,7 @@ class EmbeddingTrainer(abc.ABC):
             checkpoint = torch.load(model_path)
             static_dict = checkpoint['state_dict']
             self.model_.load_state_dict(static_dict, strict=strict)
+
             center_loss_para = checkpoint['center_loss']
             self.center_loss.load_state_dict(center_loss_para, strict=strict)
             print("{} 权重resume成功。".format(model_path))

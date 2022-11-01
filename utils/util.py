@@ -4,6 +4,87 @@ import torch
 import cv2
 import yaml
 from loguru import logger
+import json
+import io
+import base64
+from PIL import Image
+
+def get_labelme_ann(image, seg, labelmap, cls_):
+    json_data = {}
+    shapes = []
+    version = "4.5.9"
+    flags = {}
+    imagePath = image.split(os.sep)[-1]
+    img_arr = cv2.imread(image)[:, :, ::-1]
+    imageData = img_tobyte(Image.fromarray(img_arr))
+    h, w = img_arr.shape[0], img_arr.shape[1]
+
+    for i in range(1, cls_):
+        sub_mask = np.zeros((h, w), dtype="uint8")
+        sub_mask[seg == i] = 1
+        contour, _ = cv2.findContours(sub_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for cnt in contour:
+            if len(cnt) < 3:
+                continue
+            seg_info = {}
+            seg_info["label"] = str(i) + labelmap[i]
+            seg_info["points"] = cnt.reshape(-1, 2).tolist()
+            # print(seg_info["points"].shape)
+            seg_info["group_id"] = None
+            seg_info["shape_type"] = "polygon"
+            seg_info["flags"] = {}
+            shapes.append(seg_info)
+
+    json_data["shapes"] = shapes
+    json_data["version"] = version
+    json_data["flags"] = flags
+    json_data["imagePath"] = imagePath
+    json_data["imageData"] = imageData
+    json_data["imageHeight"] = h
+    json_data["imageWidth"] = w
+
+    return json_data
+
+def get_images(path, ext=None):
+    if ext is None:
+        ext = ['png']
+
+    ret = []
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            file_extend = file.split(".")[-1]
+            # file_head = file.replace("."+file_extend,"")
+            if file_extend in ext:
+                ret.append(os.path.join(root, file))
+    return ret
+
+
+def distance(embeddings1, embeddings2):
+    diff = np.subtract(embeddings1, embeddings2)
+    dist = np.sum(np.square(diff), 1)
+
+    return dist
+
+
+def img_tobyte(img_pil):
+    ENCODING = 'utf-8'
+    img_byte = io.BytesIO()
+    img_pil.save(img_byte, format='PNG')
+    binary_str2 = img_byte.getvalue()
+    imageData = base64.b64encode(binary_str2)
+    base64_string = imageData.decode(ENCODING)
+    return base64_string
+
+
+def write_json(json_data, save_path):
+    with open(save_path, "w") as f:
+        json.dump(json_data, f)
+
+
+def load_json(json_path):
+    with open(json_path) as f:
+        json_data = json.load(f)
+    return json_data
 
 
 def display_config(data):

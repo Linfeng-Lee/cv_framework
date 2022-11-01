@@ -143,10 +143,10 @@ def distance(embeddings1, embeddings2):
 
 
 if __name__ == "__main__":
-    cls_ = 2
+    cls_ = 11
     w, h = 320, 192
     model_path = r"export/embedding_shufflenet_v2_x1_0_11_320x192_2022-10-27.torchscript.pt"
-    input_dir = r"data/train"
+    input_dir = r"/home/lee/data/shuangjing/data/train"
     types = os.listdir(input_dir)
     model = ScriptModel(model_path, cls_, h, w)
 

@@ -6,8 +6,11 @@ from typing import Callable, Any, List
 import torch.nn.functional as F
 
 __all__ = [
-    'ShuffleNetV2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0',
-    'shufflenet_v2_x1_5', 'shufflenet_v2_x2_0'
+    'ShuffleNetV2',
+    'shufflenet_v2_x0_5',
+    'shufflenet_v2_x1_0',
+    'shufflenet_v2_x1_5',
+    'shufflenet_v2_x2_0'
 ]
 
 model_urls = {
@@ -36,10 +39,10 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
 
 class InvertedResidual(nn.Module):
     def __init__(
-        self,
-        inp: int,
-        oup: int,
-        stride: int
+            self,
+            inp: int,
+            oup: int,
+            stride: int
     ) -> None:
         super(InvertedResidual, self).__init__()
 
@@ -75,12 +78,12 @@ class InvertedResidual(nn.Module):
 
     @staticmethod
     def depthwise_conv(
-        i: int,
-        o: int,
-        kernel_size: int,
-        stride: int = 1,
-        padding: int = 0,
-        bias: bool = False
+            i: int,
+            o: int,
+            kernel_size: int,
+            stride: int = 1,
+            padding: int = 0,
+            bias: bool = False
     ) -> nn.Conv2d:
         return nn.Conv2d(i, o, kernel_size, stride, padding, bias=bias, groups=i)
 
@@ -98,12 +101,12 @@ class InvertedResidual(nn.Module):
 
 class ShuffleNetV2(nn.Module):
     def __init__(
-        self,
-        stages_repeats: List[int],
-        stages_out_channels: List[int],
-        embedding_classes: int = 1000,
-        inverted_residual: Callable[..., nn.Module] = InvertedResidual,
-        **kwargs
+            self,
+            stages_repeats: List[int],
+            stages_out_channels: List[int],
+            embedding_classes: int = 1000,
+            inverted_residual: Callable[..., nn.Module] = InvertedResidual,
+            **kwargs
     ) -> None:
         super(ShuffleNetV2, self).__init__()
 
@@ -152,7 +155,7 @@ class ShuffleNetV2(nn.Module):
             nn.ReLU(inplace=True),
         )
         self.fc_emb = nn.Linear(output_channels, embedding_classes)
-        self.embedding=None
+        self.embedding = None
 
     def _forward_impl(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
@@ -161,17 +164,17 @@ class ShuffleNetV2(nn.Module):
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        #normal classify head
+        # normal classify head
         x_cls = self.conv5(x)
         x_cls = x_cls.mean([2, 3])  # globalpool
         x_cls = self.fc(x_cls)
-        #embedding classify head
-        x_emb=self.conv6(x)
-        embedding=x_emb.mean([2, 3])
-        self.embedding=embedding
-        normed_emb=F.normalize(embedding,2,1)
+        # embedding classify head
+        x_emb = self.conv6(x)
+        embedding = x_emb.mean([2, 3])
+        self.embedding = embedding
+        normed_emb = F.normalize(embedding, 2, 1)
 
-        return [x_cls,normed_emb]
+        return [x_cls, normed_emb]
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
@@ -186,9 +189,9 @@ def _shufflenetv2(arch: str, pretrained: bool, progress: bool, *args: Any, **kwa
             raise NotImplementedError('pretrained {} is not supported as of now'.format(arch))
         else:
             state_dict = load_state_dict_from_url(model_url, progress=progress)
-            for key in ['fc.weight','fc.bias']:
+            for key in ['fc.weight', 'fc.bias']:
                 state_dict.pop(key)
-            model.load_state_dict(state_dict,strict=False)
+            model.load_state_dict(state_dict, strict=False)
 
     return model
 
