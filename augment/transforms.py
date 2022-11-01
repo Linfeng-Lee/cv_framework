@@ -143,7 +143,7 @@ class ConvertImageDtype(torch.nn.Module):
     This function does not support PIL Image.
 
     Args:
-        dtype (torch.dtype): Desired data type of the output
+        dtype (torch.dtype): Desired params type of the output
 
     .. note::
 
@@ -172,12 +172,12 @@ class ToPILImage:
     H x W x C to a PIL Image while preserving the value range.
 
     Args:
-        mode (`PIL.Image mode`_): color space and pixel depth of input data (optional).
-            If ``mode`` is ``None`` (default) there are some assumptions made about the input data:
+        mode (`PIL.Image mode`_): color space and pixel depth of input params (optional).
+            If ``mode`` is ``None`` (default) there are some assumptions made about the input params:
             - If the input has 4 channels, the ``mode`` is assumed to be ``RGBA``.
             - If the input has 3 channels, the ``mode`` is assumed to be ``RGB``.
             - If the input has 2 channels, the ``mode`` is assumed to be ``LA``.
-            - If the input has 1 channel, the ``mode`` is determined by the data type (i.e ``int``, ``float``,
+            - If the input has 1 channel, the ``mode`` is determined by the params type (i.e ``int``, ``float``,
             ``short``).
 
     .. _PIL.Image mode: https://pillow.readthedocs.io/en/latest/handbook/concepts.html#concept-modes
@@ -964,7 +964,7 @@ class FiveCrop(torch.nn.Module):
          >>> #In your test loop you can do the following:
          >>> input, target = batch # input is a 5d tensor, target is 2d
          >>> bs, ncrops, c, h, w = input.size()
-         >>> result = model(input.view(-1, c, h, w)) # fuse batch size and ncrops
+         >>> result = models(input.view(-1, c, h, w)) # fuse batch size and ncrops
          >>> result_avg = result.view(bs, ncrops, -1).mean(1) # avg over crops
     """
 
@@ -1012,7 +1012,7 @@ class TenCrop(torch.nn.Module):
          >>> #In your test loop you can do the following:
          >>> input, target = batch # input is a 5d tensor, target is 2d
          >>> bs, ncrops, c, h, w = input.size()
-         >>> result = model(input.view(-1, c, h, w)) # fuse batch size and ncrops
+         >>> result = models(input.view(-1, c, h, w)) # fuse batch size and ncrops
          >>> result_avg = result.view(bs, ncrops, -1).mean(1) # avg over crops
     """
 
@@ -1045,8 +1045,8 @@ class LinearTransformation(torch.nn.Module):
     original shape.
 
     Applications:
-        whitening transformation: Suppose X is a column vector zero-centered data.
-        Then compute the data covariance matrix [D x D] with torch.mm(X.t(), X),
+        whitening transformation: Suppose X is a column vector zero-centered params.
+        Then compute the params covariance matrix [D x D] with torch.mm(X.t(), X),
         perform SVD on this matrix and pass it as transformation_matrix.
 
     Args:

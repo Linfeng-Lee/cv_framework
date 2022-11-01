@@ -46,7 +46,7 @@ def focal_loss_with_logits(
     """Compute binary focal loss between target and output logits.
     See :class:`~pytorch_toolbelt.losses.FocalLoss` for details.
     Args:
-        output: Tensor of arbitrary shape (predictions of the model)
+        output: Tensor of arbitrary shape (predictions of the models)
         target: Tensor of the same shape as input
         gamma: Focal loss power factor
         alpha: Weight factor to balance positive and negative samples. Alpha must be in [0...1] range,

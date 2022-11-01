@@ -257,7 +257,7 @@ class SegmantationTrainer(BaseTrainer):
 
 
     def _cal_iou(self,pred,gt,num_class,reduction="mean"):
-        #single image segmentation iou compute, only for checking data confliction
+        #single image segmentation iou compute, only for checking params confliction
         assert reduction in ["none","mean"]
         iou_scores=[]
         for i in range(num_class):
@@ -290,14 +290,14 @@ class SegmantationTrainer(BaseTrainer):
 
     @torch.no_grad()
     def check_data_conflict(self,args,transforms,tag="train"):
-        print("check {} data conflict...".format(tag))
+        print("check {} params conflict...".format(tag))
         if tag not in ["train","test"]:
             raise ValueError("tag either be 'train' or 'test'!")
         self.model_.eval()
 
-        assert os.path.exists(args.data.replace("data","model/class_id_map.txt")),"class_id_map.txt not found."
+        assert os.path.exists(args.data.replace("params","models/class_id_map.txt")),"class_id_map.txt not found."
 
-        label_map = self._load_label_map(args.data.replace("data","model/class_id_map.txt"))
+        label_map = self._load_label_map(args.data.replace("params","models/class_id_map.txt"))
         image_paths = self._get_images(os.path.join(args.data,tag))
         json_paths=[p.replace(".png",".json") for p in image_paths]
 
@@ -313,7 +313,7 @@ class SegmantationTrainer(BaseTrainer):
             predict=self.model_(input)[0].softmax(dim=1).argmax(dim=1,keepdim=True).cpu().numpy()[0][0]
             gt=self._labelme2mask(args,p_j,label_map)
 
-            #define conflict data by IOU score
+            #define conflict params by IOU score
             miou_score=self._cal_iou(predict,gt,args.classes,reduction="mean")
 
             #case1: mean of iou scores is lowwer than given threshold
@@ -343,7 +343,7 @@ class SegmantationTrainer(BaseTrainer):
         from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
         
         model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path=args.data.replace("data","model/checkpoint.pth.tar")  
+        model_path=args.data.replace("params","models/checkpoint.pth.tar")
         checkpoint = torch.load(model_path) 
         static_dict = checkpoint['state_dict']
         model.load_state_dict(static_dict, strict=True)
@@ -369,7 +369,7 @@ class SegmantationTrainer(BaseTrainer):
         from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
         
         model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path=args.data.replace("data","model/checkpoint.pth.tar")  
+        model_path=args.data.replace("params","models/checkpoint.pth.tar")
         checkpoint = torch.load(model_path) 
         static_dict = checkpoint['state_dict']
         model.load_state_dict(static_dict, strict=True)

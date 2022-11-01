@@ -1,0 +1,47 @@
+project             : shuangjing
+
+net                 : embedding_shufflenet_v2_x1_0 #model name
+task_type           : embedding-classification
+
+#Training params
+data_root           : /home/lee/data/shuangjing/data
+input_w             : 320
+input_h             : 192
+classes             : 11
+batch_size          : 128
+start_epoch         : 0
+epochs              : 50
+balance_n_classes   : 8
+balance_n_samples   : 16
+resume              : project/shuangjing/model/checkpoint.pth.tar
+device              : gpu
+worker              : 8
+seed                : 0
+lr                  : 0.001
+criterion_list      : [ CrossEntropyLoss ]
+threshold           : 0.5
+gpus                : 0
+class_weight        : [ ]
+period_weights      : '' #auto update
+period_thresh       : 0 #auto update
+period_n_min        : 0 #auto update
+
+#Display & Save
+print_freq          : 10 #sec
+save_freq           : 500 #sec
+
+#Data Augmentation Params
+augment:
+  crop                    : False
+  change_colorspace       : False
+  contrast_normalization  : False
+  gaussian_noise          : False
+  multiply                : True
+  scale                   : True
+  rotate                  : True
+  shear                   : False
+  grayscale               : False
+  hue_and_saturation      : True
+  flip_left_right         : True
+  flip_up_down            : True
+

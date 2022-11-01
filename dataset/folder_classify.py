@@ -6,7 +6,7 @@ from dataset.folder_base import IMG_EXTENSIONS
 
 
 class DatasetFolder(VisionDatasetBase):
-    """A generic data loader where the samples are arranged in this way: ::
+    """A generic params loader where the samples are arranged in this way: ::
 
         root/class_x/xxx.ext
         root/class_x/xxy.ext
@@ -116,7 +116,7 @@ class DatasetFolder(VisionDatasetBase):
         return len(self.samples)
 
 class ImageFolder(DatasetFolder):
-    """A generic data loader where the images are arranged in this way: ::
+    """A generic params loader where the images are arranged in this way: ::
 
         root/dog/xxx.png
         root/dog/xxy.png

@@ -1,16 +1,10 @@
-import os
-
-
-def file_check(project: str):
-    project_net_config = os.path.join('project', project, 'net_config.yaml')
-    project_augment_config_yaml = os.path.join('project', project, 'augment_config.yaml')
-
-    if not os.path.exists(project_net_config):
-        ...
-    if not os.path.exists(project_augment_config_yaml):
-        ...
-
+from model import Model
+import argparse
 
 if __name__ == '__main__':
-    project = 'demo'
-    file_check(project)
+    parser = argparse.ArgumentParser(description='Training yaml config.')
+    parser.add_argument('--yaml', type=str, default='params/shuangjing.yaml', help='input your training yaml file.')
+    args = parser.parse_args()
+
+    model = Model(args.yaml)
+    model.run()
