@@ -42,7 +42,7 @@ def export_torchscript(args, weight: str, save_path: str):
                                                        str(args.input_w),
                                                        str(args.input_h),
                                                        date)
-    save_path = path_join(save_path, file_name)
+    save_path = os.path.join(save_path, file_name)
     torchscript.save(save_path)
     logger.success(f"save_path:{save_path}")
     logger.success("ok")
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         export_path = os.path.join('project', config.project, 'export')
         export_torchscript(config, args.weight, export_path)
 
-    if args.type == 'segmentation' and args.type == 'onnx':
+    if config.task_type == 'segmentation' and args.type == 'onnx':
         export_onnx(config, args.weight, export_path)
 
     if args.type == 'embedding_cls':
