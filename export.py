@@ -2,16 +2,17 @@ import os
 import time
 import shutil
 import argparse
-import numpy as np
+
 import cv2
-from tqdm import tqdm
 import torch
+from tqdm import tqdm
 from PIL import Image
 from loguru import logger
-from easydict import EasyDict as edict
 from torchvision import transforms
+
 import network
-from utils.util import write_json, get_images, path_join, load_yaml
+from utils.util import write_json, get_images
+from config.default import merge_from_file
 
 
 def export_torchscript(args, weight: str, save_path: str):
@@ -22,9 +23,9 @@ def export_torchscript(args, weight: str, save_path: str):
 
     from export.shufflenetv2_embedding import shufflenet_v2_x1_0
 
-    # weights = network.__dict__[args.net](pretrained=False, embedding_classes=args.classes)
+    model = network.__dict__[args.net](pretrained=False, num_classes=args.classes)
 
-    model = shufflenet_v2_x1_0(embedding_classes=args.classes)
+    # model = shufflenet_v2_x1_0(embedding_classes=args.classes)
     checkpoint = torch.load(weight)
     static_dict = checkpoint['state_dict']
     model.load_state_dict(static_dict, strict=True)
@@ -137,7 +138,7 @@ def export_template_json(config, weight: str, save_path: str):
     # input_dir = r"data/train"
 
     model_path = weight
-    input_dir = path_join(config.data_root, 'train')
+    input_dir = os.path.join(config.data_root, 'train')
 
     types = os.listdir(input_dir)
     model = ScriptModel(model_path, cls_, h, w)
@@ -177,7 +178,7 @@ def export_template_json(config, weight: str, save_path: str):
     localtime = time.localtime(time.time())
     date = "-".join([str(i) for i in localtime[0:3]])
 
-    save_path = path_join(save_path, f'template_norm_{date}.json')
+    save_path = os.path.join(save_path, f'template_norm_{date}.json')
     write_json(emb_vecs, save_path)
 
 
@@ -191,8 +192,10 @@ if __name__ == '__main__':
                         help='e.g.torchscript,onnx,embedding_cls')
     args = parser.parse_args()
 
-    config = load_yaml(args.yaml)
-    config = edict(config)
+    config = merge_from_file(args.yaml)
+
+    # config = load_yaml(args.yaml)
+    # config = edict(config)
 
     export_path = os.path.join('project', config.project, 'export')
 

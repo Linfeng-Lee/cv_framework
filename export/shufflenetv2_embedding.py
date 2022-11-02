@@ -104,7 +104,7 @@ class ShuffleNetV2(nn.Module):
             self,
             stages_repeats: List[int],
             stages_out_channels: List[int],
-            embedding_classes: int = 1000,
+            num_classes: int = 1000,
             inverted_residual: Callable[..., nn.Module] = InvertedResidual,
             **kwargs
     ) -> None:
@@ -154,7 +154,7 @@ class ShuffleNetV2(nn.Module):
             nn.BatchNorm2d(output_channels),
             nn.ReLU(inplace=True),
         )
-        self.fc_emb = nn.Linear(output_channels, embedding_classes)
+        self.fc_emb = nn.Linear(output_channels, num_classes)
         self.embedding = None
 
     def _forward_impl(self, x: Tensor) -> Tensor:

@@ -1,20 +1,14 @@
 import os
-import numpy as np
 import platform
 
+import numpy as np
 from loguru import logger
-from easydict import EasyDict as edict
 from torchvision import transforms
 
-from cv_framework.aug_config import config_aug
+from aug_config import config_aug
 from augment.transforms import AugTransform
 from augment.transforms_keypoints import AugKeypoints
-from utils.util import get_balance_weight, load_yaml, load_aug_config, path_join, display_config
-
-from tool.trainer.base_trainer import BaseTrainer
-from tool.trainer.segmentation_trainer import SegmantationTrainer
-from tool.trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
-from tool.trainer.embedding_trainer import EmbeddingTrainer
+from utils.util import get_balance_weight, auto_mkdir_project, load_aug_config, display_config
 
 
 class Model:
@@ -67,14 +61,17 @@ class Model:
         logger.success('Init transforms done.\n')
 
     def _init(self):
+        auto_mkdir_project(self.args.project)
+        self._update_args()
         self._init_transforms()
         self._init_trainer()
-        self._update_args()
 
     def _init_trainer(self):
 
-        self.train_data_path = path_join(self.args.data_root, "train")
-        self.val_data_path = path_join(self.args.data_root, "test")
+        self.train_data_path = os.path.join(str(self.args.data_root), "train")
+        self.val_data_path = os.path.join(str(self.args.data_root), "test")
+        assert os.path.exists(self.train_data_path)
+        assert os.path.exists(self.val_data_path)
 
         if self.args.task_type == "classification":
             from tool.trainer.base_trainer import BaseTrainer
@@ -89,7 +86,7 @@ class Model:
                                       self.args.classes,
                                       self.args.batch_size,
                                       self.args.worker,
-                                      tensorboard_save_path=path_join(self.ROOT, "config", "models/tensorboard"),
+                                      tensorboard_save_path=os.path.join(self.ROOT, "config", "models/tensorboard"),
                                       criterion_list=self.args.criterion_list,
                                       pretrained=False,
                                       args=self.args)
@@ -159,7 +156,7 @@ class Model:
                                       self.args.classes,
                                       self.args.batch_size,
                                       self.args.worker,
-                                      tensorboard_save_path=path_join(self.ROOT, "config", "models/tensorboard"),
+                                      tensorboard_save_path=os.path.join(self.ROOT, "config", "models/tensorboard"),
                                       criterion_list=self.args.criterion_list,
                                       pretrained=True,
                                       args=self.args)
@@ -184,7 +181,7 @@ class Model:
         self.trainer.fit(start_epoch=self.args.start_epoch,
                          epochs=self.args.epochs,
                          top_k=2,
-                         save_path=path_join(self.ROOT, self.args.project, 'models'),
+                         save_path=os.path.join(self.ROOT, self.args.project, 'models'),
                          normalize_transpose=self.normalize_transpose,
                          args=self.args)
 
@@ -205,7 +202,7 @@ class Model:
         logger.info(f'{self.args.net} end test.')
 
     # def export_model(self):
-    #     export_path = path_join(self.ROOT, self.args.project, 'export')
+    #     export_path = os.path.join(self.ROOT, self.args.project, 'export')
     #
     #     self.trainer.export_torchscript(self.args, export_path)
     #     if self.args.task_type == "segmentation":

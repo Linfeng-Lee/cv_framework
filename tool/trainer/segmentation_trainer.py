@@ -137,9 +137,9 @@ class SegmantationTrainer(BaseTrainer):
                 }, is_best, save_path
             )
 
-            if (not args.control.projectOperater.automate) and \
-                    (not args.control.projectOperater.training):
-                break
+            # if (not args.control.projectOperater.automate) and \
+            #         (not args.control.projectOperater.training):
+            #     break
 
     def train_epoch(self, epoch, top_k, args, **kwargs):
         batch_time = AverageMeter('Time', ':6.3f')
@@ -170,6 +170,7 @@ class SegmantationTrainer(BaseTrainer):
                 mask_target_remove_no_json = mask_target_remove_no_json.cuda(args.gpus)
             for cur_time in range(args.cycle_train_times):
                 mask_output = self.model_(images_remove_no_json)
+
                 loss_mask = self.criterion[0](mask_output, mask_target_remove_no_json)
                 loss = loss_mask
                 if cur_time > 0:
@@ -204,11 +205,7 @@ class SegmantationTrainer(BaseTrainer):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            # ui display training progress
-            args.control.projectOperater.dataCount += 1 / (args.epochs * len(self.train_loader_remove_no_json_))
-            args.control.projectOperater.loss = loss_mask_output_avg.avg
-            args.control.projectOperater.trainAcu = batch_miou
-
+            args.dataCount+= 1 / (args.epochs * len(self.train_loader_remove_no_json_))
             if i % args.print_freq == 0:
                 progress.display(i)
                 print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
@@ -223,9 +220,9 @@ class SegmantationTrainer(BaseTrainer):
                 )
             i += 1
 
-            if (not args.control.projectOperater.automate) and \
-                    (not args.control.projectOperater.training):
-                break
+            # if (not args.control.projectOperater.automate) and \
+            #         (not args.control.projectOperater.training):
+            #     break
         self.evaluator.reset()
 
     def _load_label_map(self, path):
@@ -345,6 +342,7 @@ class SegmantationTrainer(BaseTrainer):
         rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
 
         from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
+        # model = network.__dict__[args.net](pretrained=False, num_classes=args.classes)
 
         model = shufflenet_v2_x1_0(num_classes=args.classes)
         model_path = args.data.replace("config", "models/checkpoint.pth.tar")

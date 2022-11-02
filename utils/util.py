@@ -1,23 +1,24 @@
-import shutil, os, glob
-import numpy as np
-import torch
-import cv2
-import yaml
-from loguru import logger
-import json
 import io
 import base64
+import json
+import shutil, os, glob
+
+import cv2
+import yaml
+import torch
+import numpy as np
+
+from loguru import logger
 from PIL import Image
-import math
 
 
 def auto_mkdir_project(project_name: str):
     sub_dir = ['export', 'runs', 'weights', 'log']
-    dirs = [path_join('project', project_name, item) for item in sub_dir]
+    dirs = [os.path.join('project', project_name, item) for item in sub_dir]
     for d in dirs:
         if os.path.exists(d):
             continue
-        os.mkdir(d)
+        os.makedirs(d)
     logger.info(f'Create {project_name}')
 
 
@@ -104,16 +105,16 @@ def display_config(data):
     for k, v in data.items():
         if k == 'augment':
             continue
-        logger.info(f'[{k}]{type(v)} : {v}')
+        logger.info('{:30} : {}'.format(k, v))
 
     logger.info('')
 
     for k, v in data['augment'].items():
-        logger.info(f'[{k}]{type(v)} : {v}')
+        logger.info('{:30} : {}'.format(k, v))
 
 
-def path_join(*path):
-    return os.path.join(*path)
+# def path_join(path, *paths):
+#     return os.path.join(path, *paths)
 
 
 def load_aug_config(params) -> list:
@@ -228,9 +229,9 @@ def make_dir(root_path, clear_flag=True):
     if os.path.exists(root_path):
         if clear_flag:
             shutil.rmtree(root_path)
-            os.mkdir(root_path)
+            os.makedirs(root_path)
     else:
-        os.mkdir(root_path)
+        os.makedirs(root_path)
 
 
 def get_key(dct, value):

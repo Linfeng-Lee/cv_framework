@@ -215,8 +215,7 @@ class EmbeddingTrainer(abc.ABC):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            # ui display training progress
-            # args.control.projectOperater.dataCount += 1 / (args.epochs * len(self.train_loader_))
+
             args.dataCount += 1 / (args.epochs * len(self.train_loader_))
 
             if i % args.print_freq == 0:
@@ -229,16 +228,15 @@ class EmbeddingTrainer(abc.ABC):
                 progress.display(i)
                 print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
 
-                # args.loss = losses.avg.item()
-                # args.trainAuc = top1.avg.item()
-
-            # if (not args.control.projectOperater.automate) and \
-            #         (not args.control.projectOperater.training):
-            #     break
-
-    def test_mask(self, show_channel, score_threshold, area_threshold, args,
-                  test_error_src_img_save_path="temp/origin_hard", test_res_img_save_path="temp/output",
-                  img_mask_info_save_file="temp//img_mask_info_save_file.txt", mask_res_file="temp//mask.txt",
+    def test_mask(self,
+                  show_channel,
+                  score_threshold,
+                  area_threshold,
+                  args,
+                  test_error_src_img_save_path="temp/origin_hard",
+                  test_res_img_save_path="temp/output",
+                  img_mask_info_save_file="temp/img_mask_info_save_file.txt",
+                  mask_res_file="temp/mask.txt",
                   **kwargs):
         """
             Test the network segmentation effect use val dataset.
