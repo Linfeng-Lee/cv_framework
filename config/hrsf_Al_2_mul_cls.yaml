@@ -3,22 +3,22 @@ net                           : shufflenet_v2_x1_0
 task_type                     : multilabel-classification
 
 classes                       : 12
-data_root                     :
+data_root                     : '/home/lee/data/huaruenshuenfeng/数据/铝片工位二多标签'
 input_w                       : 288
 input_h                       : 320
-batch_size                    : 128
+batch_size                    : 64
 start_epoch                   : 0
-epochs                        : 70
+epochs                        : 80
 balance_n_classes             : 8
-balance_n_samples             : 16
-resume                        : project/huaruenshuenfeng/weights/checkpoint.pth.tar
+balance_n_samples             : 8
+resume                        : project/hrsf_Al_2/weights/checkpoint.pth.tar
 device                        : gpu
 worker                        : 8
 seed                          : 0
 lr                            : 0.01
-criterion_list                : [ SoftmaxCrossentropyLoss ]
+criterion_list                : [ AsymmetricLoss ]
 threshold                     : 0.5
-gpu                           : 0
+gpus                          : 0
 class_weight                  : []
 #class_weight                 : [ 0.56,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04 ]
 print_freq                    : 10

@@ -4,3 +4,6 @@
 *.pyc
 *.tar
 *.onnx
+*.png
+*.jpeg
+*.jpg

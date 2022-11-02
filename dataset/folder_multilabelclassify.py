@@ -1,13 +1,14 @@
-import sys,os,os.path,json,random,pathlib
+import sys, os, os.path, json, random, pathlib
 import numpy as np
 import datetime
 import cv2
 from tqdm import tqdm
-from typing import Any, Callable,Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from augment import transforms as aug_transforms
 
 from dataset.folder_base import VisionDatasetBase
 from dataset.folder_base import IMG_EXTENSIONS
+
 
 class JsonEncoder(json.JSONEncoder):
 
@@ -23,10 +24,12 @@ class JsonEncoder(json.JSONEncoder):
         else:
             return super(MyEncoder, self).default(obj)
 
+
 def save_dict(filename, dic):
     '''save dict into json file'''
-    with open(filename,'w',encoding="utf-8") as json_file:
+    with open(filename, 'w', encoding="utf-8") as json_file:
         json.dump(dic, json_file, ensure_ascii=False, cls=JsonEncoder)
+
 
 class DatasetFolder(VisionDatasetBase):
     """A generic config loader where the samples are arranged in this way: ::
@@ -74,14 +77,14 @@ class DatasetFolder(VisionDatasetBase):
 
         self.is_valid_file = is_valid_file
         if is_valid_file:
-            self.reload_data_path = os.path.join(root,"test.json")
+            self.reload_data_path = os.path.join(root, "test.json")
         else:
-            self.reload_data_path = os.path.join(root,"train.json")
+            self.reload_data_path = os.path.join(root, "train.json")
 
         self.samples, self.classes, self.class_to_count, self.class_to_idx = self.load_data(self.root)
 
         if loader is None:
-            self.loader=self.default_loader
+            self.loader = self.default_loader
         else:
             self.loader = loader
 
@@ -99,7 +102,6 @@ class DatasetFolder(VisionDatasetBase):
         classes = []
         class_to_count = {}
         class_to_idx = {}
-
         for img_path in tqdm(data_list):
             labels_json_path = os.path.splitext(img_path)[0] + ".json"
             if not os.path.exists(labels_json_path):
@@ -116,8 +118,8 @@ class DatasetFolder(VisionDatasetBase):
                 if label_digit == -1:
                     print("label头部沒有数字！path：{}".format(img_path))
 
-                class_to_idx.setdefault(label_digit,label)
-                class_to_count.setdefault(label_digit,0)
+                class_to_idx.setdefault(label_digit, label)
+                class_to_count.setdefault(label_digit, 0)
 
                 if val:
                     class_to_count[label_digit] += 1
@@ -132,13 +134,13 @@ class DatasetFolder(VisionDatasetBase):
             classes.extend(list(labelsdic.keys()))
             classes = list(set(classes))
 
-        class_to_idx = dict(sorted(class_to_idx.items(), key=lambda x:x[0]))
-        class_to_idx = dict(zip(class_to_idx.values(),class_to_idx.keys()))
-        classes=list(class_to_idx.keys())
+        class_to_idx = dict(sorted(class_to_idx.items(), key=lambda x: x[0]))
+        class_to_idx = dict(zip(class_to_idx.values(), class_to_idx.keys()))
+        classes = list(class_to_idx.keys())
 
         return t_data_list, classes, class_to_count, class_to_idx
 
-    def get_data_list(self,dir, extensions=None, is_valid_file=None):
+    def get_data_list(self, dir, extensions=None, is_valid_file=None):
         images = []
         dir = os.path.expanduser(dir)
 
@@ -154,10 +156,9 @@ class DatasetFolder(VisionDatasetBase):
 
     def get_label_head_digit(self, label):
 
-        digitStr=str(label.split("_")[0])
+        digitStr = str(label.split("_")[0])
 
         return digitStr
-
 
     def _find_classes(self, dir, is_valid_file=None):
         """
@@ -182,9 +183,9 @@ class DatasetFolder(VisionDatasetBase):
 
         return classes, class_to_idx
 
-    def keypoint_loader(self,path):
-        with open(path,'r',encoding="utf-8")as f:
-            keypoints_json=json.load(f)
+    def keypoint_loader(self, path):
+        with open(path, 'r', encoding="utf-8") as f:
+            keypoints_json = json.load(f)
         return keypoints_json
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
@@ -198,7 +199,7 @@ class DatasetFolder(VisionDatasetBase):
         cur_info = self.samples[index]
         sample = self.loader(cur_info["img_path"])
 
-        target = len(self.classes)*[0]
+        target = len(self.classes) * [0]
         for label in cur_info["label"]:
             target[int(label)] = 1
 
@@ -211,14 +212,15 @@ class DatasetFolder(VisionDatasetBase):
             normalize_transpose = aug_transforms.NormalizeTranspose(mean=norm.mean, std=norm.std)
             img_aug = normalize_transpose(sample)
             img_aug = np.array(img_aug.cpu().detach().numpy(), dtype=np.uint8)
-            img_aug = cv2.cvtColor(img_aug.transpose(1,2,0), cv2.COLOR_RGB2BGR)
+            img_aug = cv2.cvtColor(img_aug.transpose(1, 2, 0), cv2.COLOR_RGB2BGR)
             # cv2.imwrite(aug_path, img_aug)
             self.save_aug_img_count += 1
 
-        return sample, np.array(target, dtype=np.float)#, count
+        return sample, np.array(target, dtype=np.float)  # , count
 
     def __len__(self) -> int:
         return len(self.samples)
+
 
 class ImageFolder(DatasetFolder):
     """A generic config loader where the images are arranged in this way: ::

@@ -38,6 +38,7 @@ __C.class_id_map_save_path = 'temp/class_id_map.txt'
 __C.period_n_min = 10000
 __C.asymmetry_id = False
 __C.class_weight = []
+__C.data_count = 0
 
 # Display & Save
 __C.print_freq = 10  # sec

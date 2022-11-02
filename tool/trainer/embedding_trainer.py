@@ -1,6 +1,6 @@
 import abc, shutil, os, time, socket
 from datetime import datetime
-
+from loguru import logger
 import torch
 from torchvision import datasets
 from tensorboardX import SummaryWriter
@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import tqdm
 from PIL import Image, ImageFile
+from tqdm import tqdm
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -131,10 +132,6 @@ class EmbeddingTrainer(abc.ABC):
             criterion.append(build_loss(criterion_name, **kwargs).cuda(gpus))
         return criterion
 
-    # def define_lr_scheduler(self, optimizer):
-    #     lr_scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 1 / (epoch / 4 + 1))
-    #     return lr_scheduler
-
     def define_lr_scheduler(self, optimizer):
         lrs = OneCycleLR(optimizer, max_lr=self.args.lr, steps_per_epoch=len(self.train_loader_),
                          epochs=self.args.epochs,
@@ -146,6 +143,7 @@ class EmbeddingTrainer(abc.ABC):
         best_acc = 0.5
         for epoch in range(start_epoch, epochs):
             # self.lr_scheduler_.step()
+
             self.train_epoch(epoch, top_k, args, **kwargs)
             top1_acc = self.validate(epoch, top_k, args)
             is_best = top1_acc >= best_acc
@@ -155,15 +153,10 @@ class EmbeddingTrainer(abc.ABC):
                     "epoch": epoch + 1,
                     "state_dict": self.model_.state_dict(),
                     "best_acc1": top1_acc,
-                }, is_best, save_path
+                },
+                is_best,
+                save_path
             )
-
-            # if (not args.control.projectOperater.automate) and \
-            #     (not args.control.projectOperater.training):
-            # if (not args.control.projectOperater.automate) and \
-            #     (not args.control.projectOperater.training):
-            #     break
-
     def train_epoch(self, epoch, top_k, args, normalize_transpose=None):
         topn_str = "Acc@{}".format(top_k)
         batch_time = AverageMeter('Time', ':6.3f')
@@ -176,11 +169,13 @@ class EmbeddingTrainer(abc.ABC):
                                  prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
-        start_iter = epoch * len(self.train_loader_)
+        train_len = len(self.train_loader_)
+        start_iter = epoch * train_len
         end = time.time()
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
 
-        for i, (images, target) in enumerate(self.train_loader_):
+        pbar = tqdm(enumerate(self.train_loader_), total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        for i, (images, target) in pbar:
             data_time.update(time.time() - end)
             if torch.cuda.is_available():
                 images = images.cuda(args.gpus)
@@ -215,8 +210,13 @@ class EmbeddingTrainer(abc.ABC):
             batch_time.update(time.time() - end)
             end = time.time()
 
+            # display
+            self._loss = round(losses.avg, 5)
+            self._top1 = round(float(top1.avg), 3)
+            self._top5 = round(float(topn.avg), 3)
+            self._lr = round(self.optimizer_.param_groups[0]['lr'], 5)
 
-            args.dataCount += 1 / (args.epochs * len(self.train_loader_))
+            args.data_count += 1 / (args.epochs * len(self.train_loader_))
 
             if i % args.print_freq == 0:
                 # 这里进行记录，是为了避免过多的数据跳动。
@@ -225,8 +225,12 @@ class EmbeddingTrainer(abc.ABC):
                 self.writer.add_images('input_img', origin_input, (start_iter + i))
                 self.writer.add_scalar("train_loss", losses.avg, (start_iter + i))
                 self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
-                progress.display(i)
-                print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
+
+                logger.debug(f'[{epoch}/{args.epochs}] | '
+                             f'loss:{self._loss} | '
+                             f'Acc@1:{self._top1} | '
+                             f'Acc@5:{self._top5} | '
+                             f'lr:{self._lr}')
 
     def test_mask(self,
                   show_channel,
@@ -561,33 +565,6 @@ class EmbeddingTrainer(abc.ABC):
         else:
             # print(cur_output.sum())
             return True
-
-    def export_torchscript(self, args, save_path):
-        print("export torchscript...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
-
-        from export.shufflenetv2_embedding import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(embedding_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-
-        model.cuda()
-        model.eval()
-
-        torchscript = torch.jit.trace(model, rand_input, strict=False)
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
-                                                           str(args.classes), \
-                                                           str(args.input_w), \
-                                                           str(args.input_h), \
-                                                           date)
-        torchscript.save(os.path.join(save_path, file_name))
-        print("ok")
 
     @torch.no_grad()
     def check_data_conflict(self, args, transforms, tag="train"):

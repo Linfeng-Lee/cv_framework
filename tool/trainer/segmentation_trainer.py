@@ -1,10 +1,10 @@
 import json
 import time
 from matplotlib import lines
-
+from loguru import logger
 import torch
 from torch import nn
-
+from tqdm import tqdm
 from tool.trainer.base_trainer import BaseTrainer
 from dataset.data_pipe import get_loader_mask
 
@@ -129,6 +129,10 @@ class SegmantationTrainer(BaseTrainer):
             top1_acc = self.validate(epoch, top_k, args)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
+
+            logger.debug(f'[{epoch}/{args.epochs}] | '
+                         f'top1_accc:{round(float(top1_acc), 4)} | '
+                         f'best_acc:{round(float(best_acc), 4)} | ')
             self.save_checkpoint(
                 {
                     "epoch": epoch + 1,
@@ -137,9 +141,6 @@ class SegmantationTrainer(BaseTrainer):
                 }, is_best, save_path
             )
 
-            # if (not args.control.projectOperater.automate) and \
-            #         (not args.control.projectOperater.training):
-            #     break
 
     def train_epoch(self, epoch, top_k, args, **kwargs):
         batch_time = AverageMeter('Time', ':6.3f')
@@ -151,12 +152,14 @@ class SegmantationTrainer(BaseTrainer):
             prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
-        start_iter = epoch * len(self.train_loader_remove_no_json_)
+        train_len = len(self.train_loader_remove_no_json_)
+        start_iter = epoch * train_len
         end = time.time()
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
         i = 0
         self.evaluator.reset()
-        for no_json_list in self.train_loader_remove_no_json_:  # img_tensor,class_id,mask_trg,img_path
+        pbar = tqdm(self.train_loader_remove_no_json_, total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        for no_json_list in pbar:  # img_tensor,class_id,mask_trg,img_path
             data_time.update(time.time() - end)
             # 为了兼容后期返回的各种数量长度
             if isinstance(no_json_list, list):
@@ -205,11 +208,17 @@ class SegmantationTrainer(BaseTrainer):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            args.dataCount+= 1 / (args.epochs * len(self.train_loader_remove_no_json_))
+            args.data_count += 1 / (args.epochs * len(self.train_loader_remove_no_json_))
             if i % args.print_freq == 0:
-                progress.display(i)
-                print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
+                # progress.display(i)
+                # print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
+                _lr = self.optimizer_.param_groups[0]['lr']
                 self.writer.add_scalar("train_mask_loss", loss_mask_output_avg.avg, start_iter + i)
+
+                logger.debug(f'[{epoch}/{args.epochs}] | '
+                             f'loss_mask_output_avg:{round(float(loss_mask_output_avg.avg), 4)} | '
+                             f'lr:{round(float(_lr), 4)} | ')
+
             if (i + 1) % args.save_freq == 0:
                 self.save_checkpoint(
                     {
@@ -220,9 +229,6 @@ class SegmantationTrainer(BaseTrainer):
                 )
             i += 1
 
-            # if (not args.control.projectOperater.automate) and \
-            #         (not args.control.projectOperater.training):
-            #     break
         self.evaluator.reset()
 
     def _load_label_map(self, path):
@@ -336,58 +342,3 @@ class SegmantationTrainer(BaseTrainer):
             args.control.projectOperater.dataCount += 1 / len(image_paths)
 
         print("done")
-
-    def export_torchscript(self, args, save_path):
-        print("export torchscript...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
-
-        from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
-        # model = network.__dict__[args.net](pretrained=False, num_classes=args.classes)
-
-        model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-        model.cuda()
-        model.eval()
-
-        torchscript = torch.jit.trace(model, rand_input, strict=False)
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
-                                                           str(args.classes), \
-                                                           str(args.input_w), \
-                                                           str(args.input_h), \
-                                                           date)
-        torchscript.save(os.path.join(save_path, file_name))
-        print("ok")
-
-    def export_onnx(self, args, save_path):
-        print("export onnx...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cpu()
-
-        from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-        model.cpu()
-        model.eval()
-
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.onnx".format(args.model_names, \
-                                                 str(args.classes), \
-                                                 str(args.input_w), \
-                                                 str(args.input_h), \
-                                                 date)
-        torch.onnx.export(model, rand_input, os.path.join(save_path, file_name), verbose=False, opset_version=12,
-                          input_names=['images'],
-                          output_names=['output'])
-
-        print("ok")

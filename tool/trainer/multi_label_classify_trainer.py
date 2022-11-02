@@ -3,6 +3,8 @@ import time
 import torch
 from torch import nn
 import numpy as np
+from tqdm import tqdm
+from loguru import logger
 
 from tool.trainer.base_trainer import BaseTrainer
 from dataset.data_pipe import get_loader_multi_label_class
@@ -40,14 +42,21 @@ class MultiLabelClassifyTrainer(BaseTrainer):
         self.model_ = self.create_model(model_names, pretrained, num_classes=classes).cuda(gpus)
         self.optimizer_ = self.define_optimizer(lr)
         self.classify_transform = classify_transform
-        self.train_loader_ = get_loader_multi_label_class(train_data_path, classify_transform,
+        self.loss = 0.0
+        self.train_loader_ = get_loader_multi_label_class(train_data_path,
+                                                          classify_transform,
                                                           kwargs["balance_n_classes"],
-                                                          kwargs["balance_n_samples"], kwargs["class_id_map_save_path"],
-                                                          kwargs["tensor_transform"], kwargs["weights"])
-        self.val_loader_ = get_loader_multi_label_class(val_data_path, kwargs["tensor_transform"],
+                                                          kwargs["balance_n_samples"],
+                                                          kwargs["class_id_map_save_path"],
+                                                          kwargs["tensor_transform"],
+                                                          kwargs["weights"])
+        self.val_loader_ = get_loader_multi_label_class(val_data_path,
+                                                        kwargs["tensor_transform"],
                                                         kwargs["balance_n_classes"],
-                                                        kwargs["balance_n_samples"], kwargs["class_id_map_save_path"],
-                                                        kwargs["tensor_transform"], kwargs["weights"],
+                                                        kwargs["balance_n_samples"],
+                                                        kwargs["class_id_map_save_path"],
+                                                        kwargs["tensor_transform"],
+                                                        kwargs["weights"],
                                                         is_training=False)
         self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
         self.criterion = self.define_criterion(criterion_list, gpus, **kwargs)
@@ -57,25 +66,26 @@ class MultiLabelClassifyTrainer(BaseTrainer):
     def fit(self, start_epoch, epochs, top_k, args, save_path, **kwargs):
         best_acc = 0.5
         for epoch in range(start_epoch, epochs):
+            logger.info(f'[{start_epoch}/{epochs}]')
+
             # self.lr_scheduler_.step()
             self.train_epoch(epoch, top_k, args, **kwargs)
             top1_acc = self.validate(epoch, top_k, args)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
-            self.save_checkpoint(
-                {
-                    "epoch": epoch + 1,
-                    "state_dict": self.model_.state_dict(),
-                    "best_acc1": top1_acc,
-                }, is_best, save_path
-            )
 
-            if (not args.control.projectOperater.automate) and \
-                    (not args.control.projectOperater.training):
-                break
+        self.save_checkpoint(
+            {
+                "epoch": epoch + 1,
+                "state_dict": self.model_.state_dict(),
+                "best_acc1": top1_acc,
+            }, is_best, save_path
+        )
 
     def define_lr_scheduler(self, optimizer):
-        lrs = OneCycleLR(optimizer, max_lr=self.args.lr, steps_per_epoch=len(self.train_loader_),
+        lrs = OneCycleLR(optimizer,
+                         max_lr=self.args.lr,
+                         steps_per_epoch=len(self.train_loader_),
                          epochs=self.args.epochs,
                          pct_start=0.2)
 
@@ -93,10 +103,16 @@ class MultiLabelClassifyTrainer(BaseTrainer):
             prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
-        start_iter = epoch * len(self.train_loader_)
+        train_len = len(self.train_loader_)
+        start_iter = epoch * train_len
+        total_iter = self.args.epochs * train_len
         end = time.time()
+        # 记录lr
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
-        for i, (images, target) in enumerate(self.train_loader_):
+
+        # pbar = tqdm(range(start_epoch, epochs), total=epochs, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        pbar = tqdm(enumerate(self.train_loader_), total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        for i, (images, target) in pbar:
 
             data_time.update(time.time() - end)
 
@@ -115,29 +131,31 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                 self.lr_scheduler_.step()
 
             except Exception as e:
-                print(e, "请检查config配置的classes是不是实际训练集的类别数。")
+                logger.error(e, "请检查config配置的classes是不是实际训练集的类别数。")
 
             acc1, accmulti = accuracymultilabel(output, target)
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             topmulti.update(accmulti[0], images.size(0))
 
-            # ui display training progress
-            args.control.projectOperater.dataCount += 1 / (args.epochs * len(self.train_loader_))
+            args.data_count += 1 / (args.epochs * len(self.train_loader_))
+
+            # display
+            _lr = self.optimizer_.param_groups[0]['lr']
 
             if i % args.print_freq == 0:
                 # 这里进行记录，是为了避免过多的数据跳动。
+                # y=batch
                 self.writer.add_scalar("train_loss", losses.avg, start_iter + i)
                 self.writer.add_scalar("train_acc1", top1.avg, start_iter + i)
-                progress.display(i)
-                print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
 
-                args.control.projectOperater.loss = losses.avg
-                args.control.projectOperater.trainAcu = top1.avg
+                logger.debug(f'[{epoch}/{args.epochs}] | '
+                             f'Loss:{round(float(losses.avg), 4)} | '
+                             f'lr:{round(float(_lr), 4)} | '
+                             f'Acc@1:{round(float(top1.avg), 4)} | '
+                             f'Accmulti:{round(float(topmulti.avg), 3)}')
 
-            if (not args.control.projectOperater.automate) and \
-                    (not args.control.projectOperater.training):
-                break
+                # progress.display(i)
 
     def validate(self, epoch, top_k, args, **kwargs):
         """
@@ -197,22 +215,22 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                 if i % args.print_freq == 0:
                     progress.display(i)
 
-                if (not args.control.projectOperater.automate) and \
-                        (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
-                    break
-                    # TODO: 返回top几的准确度
-            print(' * Acc@1 {top1.avg:.3f} accmulti {topmulti.avg:.3f}'
-                  .format(top1=top1, topmulti=topmulti))
+                # if (not args.control.projectOperater.automate) and \
+                #         (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
+                #     break
+                # TODO: 返回top几的准确度
+            logger.info(' * Acc@1 {top1.avg:.3f} accmulti {topmulti.avg:.3f}'
+                        .format(top1=top1, topmulti=topmulti))
 
-        print(confusion_matrix_multilabel)
+        logger.info(confusion_matrix_multilabel)
         self.writer.add_scalar("val_acc1", top1.avg, epoch)
-        args.control.projectOperater.testAcu = top1.avg
+        # args.control.projectOperater.testAcu = top1.avg
 
         return top1.avg
 
     @torch.no_grad()
     def check_data_conflict(self, args, transforms, tag="train"):
-        print("check {} config conflict...".format(tag))
+        logger.info("check {} config conflict...".format(tag))
         if tag not in ["train", "test"]:
             raise ValueError("tag either be 'train' or 'test'!")
         self.model_.eval()
@@ -260,44 +278,4 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                 shutil.move(p, dst_path)
                 shutil.move(p.replace(".png", ".json"), dst_path)
 
-            if (not args.control.projectOperater.checking_train) and \
-                    (not args.control.projectOperater.checking_test):
-                print("abort")
-                return
-                # ui display progress
-            args.control.projectOperater.dataCount += 1 / len(image_paths)
-
-        print("done")
-
-    def export_torchscript(self, args, save_path):
-        print("export torchscript...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
-
-        from export.shufflenetv2 import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-
-        model.cuda()
-        model.eval()
-
-        torchscript = torch.jit.trace(model, rand_input, strict=False)
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_multilabel_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
-                                                                      str(args.classes), \
-                                                                      str(args.input_w), \
-                                                                      str(args.input_h), \
-                                                                      date)
-        torchscript.save(os.path.join(save_path, file_name))
-        print("ok")
-
-    def define_lr_scheduler(self, optimizer):
-        steps_per_epoch = len(self.train_loader_)
-        lr_scheduler = OneCycleLR(optimizer, max_lr=self.lr, steps_per_epoch=steps_per_epoch, epochs=self.epoches,
-                                  pct_start=0.2)
-        return lr_scheduler
+        logger.info("done")

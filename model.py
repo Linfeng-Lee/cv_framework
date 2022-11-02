@@ -18,6 +18,12 @@ class Model:
         self.trainer = None
         self._init()
 
+    def _init(self):
+        auto_mkdir_project(self.args.project)
+        self._update_args()
+        self._init_transforms()
+        self._init_trainer()
+
     def _update_args(self):
         logger.info('🚀Update args....')
         self.args.asymmetry_id = False
@@ -60,12 +66,6 @@ class Model:
 
         logger.success('Init transforms done.\n')
 
-    def _init(self):
-        auto_mkdir_project(self.args.project)
-        self._update_args()
-        self._init_transforms()
-        self._init_trainer()
-
     def _init_trainer(self):
 
         self.train_data_path = os.path.join(str(self.args.data_root), "train")
@@ -86,8 +86,8 @@ class Model:
                                       self.args.classes,
                                       self.args.batch_size,
                                       self.args.worker,
-                                      tensorboard_save_path=os.path.join(self.ROOT, "config", "models/tensorboard"),
                                       criterion_list=self.args.criterion_list,
+                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
                                       pretrained=False,
                                       args=self.args)
 
@@ -102,6 +102,7 @@ class Model:
                                       self.args.classes,
                                       classify_transform=self.train_transform,
                                       criterion_list=self.args.criterion_list,
+                                      tensorboard_save_path=os.path.join('project', self.args.project, 'runs'),
                                       tensor_transform=self.tensor_transforms,
                                       mask_transform=self.keypoint_transforms,
                                       balance_n_classes=self.args.balance_n_classes,
@@ -127,7 +128,8 @@ class Model:
                                       self.args.gpus,
                                       self.args.classes,
                                       classify_transform=self.train_transform,
-                                      criterion_list=["AsymmetricLoss"],
+                                      criterion_list=self.args.criterion_list,
+                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
                                       tensor_transform=self.tensor_transforms,
                                       balance_n_classes=self.args.balance_n_classes,
                                       balance_n_samples=self.args.balance_n_samples,
@@ -156,7 +158,7 @@ class Model:
                                       self.args.classes,
                                       self.args.batch_size,
                                       self.args.worker,
-                                      tensorboard_save_path=os.path.join(self.ROOT, "config", "models/tensorboard"),
+                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, "runs"),
                                       criterion_list=self.args.criterion_list,
                                       pretrained=True,
                                       args=self.args)

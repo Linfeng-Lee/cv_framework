@@ -52,9 +52,11 @@ def export_onnx(args, weight: str, save_path: str):
     logger.info("export onnx...")
     rand_input = torch.rand(1, 3, args.input_h, args.input_w).cpu()
 
-    from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
+    # from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
 
-    model = shufflenet_v2_x1_0(num_classes=args.classes)
+    # model = shufflenet_v2_x1_0(num_classes=args.classes)
+    model = network.__dict__[args.net](pretrained=False, num_classes=args.classes)
+
     # model_path = args.data.replace("config", "models/checkpoint.pth.tar")
     checkpoint = torch.load(weight)
     static_dict = checkpoint['state_dict']
