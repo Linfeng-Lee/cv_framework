@@ -12,7 +12,7 @@ from utils.util import make_dir
 
 
 class DatasetFolder(VisionDatasetBase):
-    """A generic params loader where the samples are arranged in this way: ::
+    """A generic config loader where the samples are arranged in this way: ::
 
         root/class_x/xxx.ext
         root/class_x/xxy.ext
@@ -277,7 +277,7 @@ class DatasetFolder(VisionDatasetBase):
 
 
 class ImageFolder(DatasetFolder):
-    """A generic params loader where the images are arranged in this way: ::
+    """A generic config loader where the images are arranged in this way: ::
 
         root/dog/xxx.png
         root/dog/xxy.png

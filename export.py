@@ -22,7 +22,7 @@ def export_torchscript(args, weight: str, save_path: str):
 
     from export.shufflenetv2_embedding import shufflenet_v2_x1_0
 
-    # model = network.__dict__[args.net](pretrained=False, embedding_classes=args.classes)
+    # weights = network.__dict__[args.net](pretrained=False, embedding_classes=args.classes)
 
     model = shufflenet_v2_x1_0(embedding_classes=args.classes)
     checkpoint = torch.load(weight)
@@ -54,7 +54,7 @@ def export_onnx(args, weight: str, save_path: str):
     from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
 
     model = shufflenet_v2_x1_0(num_classes=args.classes)
-    # model_path = args.data.replace("params", "models/checkpoint.pth.tar")
+    # model_path = args.data.replace("config", "models/checkpoint.pth.tar")
     checkpoint = torch.load(weight)
     static_dict = checkpoint['state_dict']
     model.load_state_dict(static_dict, strict=True)
@@ -183,9 +183,9 @@ def export_template_json(config, weight: str, save_path: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training yaml config.')
-    parser.add_argument('--yaml', type=str, default='params/shuangjing.yaml',
+    parser.add_argument('--yaml', type=str, default='config/shuangjing_emb_cls.yaml',
                         help='input your training yaml file.')
-    parser.add_argument('--weight', type=str, default='project/shuangjing/model/checkpoint.pth.tar',
+    parser.add_argument('--weight', type=str, default='project/shuangjing/weights/checkpoint.pth.tar',
                         help='input your weight.')
     parser.add_argument('--type', type=str, default='torchscript',
                         help='e.g.torchscript,onnx,embedding_cls')

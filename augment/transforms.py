@@ -143,7 +143,7 @@ class ConvertImageDtype(torch.nn.Module):
     This function does not support PIL Image.
 
     Args:
-        dtype (torch.dtype): Desired params type of the output
+        dtype (torch.dtype): Desired config type of the output
 
     .. note::
 
@@ -172,12 +172,12 @@ class ToPILImage:
     H x W x C to a PIL Image while preserving the value range.
 
     Args:
-        mode (`PIL.Image mode`_): color space and pixel depth of input params (optional).
-            If ``mode`` is ``None`` (default) there are some assumptions made about the input params:
+        mode (`PIL.Image mode`_): color space and pixel depth of input config (optional).
+            If ``mode`` is ``None`` (default) there are some assumptions made about the input config:
             - If the input has 4 channels, the ``mode`` is assumed to be ``RGBA``.
             - If the input has 3 channels, the ``mode`` is assumed to be ``RGB``.
             - If the input has 2 channels, the ``mode`` is assumed to be ``LA``.
-            - If the input has 1 channel, the ``mode`` is determined by the params type (i.e ``int``, ``float``,
+            - If the input has 1 channel, the ``mode`` is determined by the config type (i.e ``int``, ``float``,
             ``short``).
 
     .. _PIL.Image mode: https://pillow.readthedocs.io/en/latest/handbook/concepts.html#concept-modes
@@ -595,7 +595,7 @@ class RandomCrop(torch.nn.Module):
             output_size (tuple): Expected output size of the crop.
 
         Returns:
-            tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
+            tuple: config (i, j, h, w) to be passed to ``crop`` for random crop.
         """
         w, h = F._get_image_size(img)
         th, tw = output_size
@@ -874,7 +874,7 @@ class RandomResizedCrop(torch.nn.Module):
             ratio (list): range of aspect ratio of the origin aspect ratio cropped
 
         Returns:
-            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
+            tuple: config (i, j, h, w) to be passed to ``crop`` for a random
                 sized crop.
         """
         width, height = F._get_image_size(img)
@@ -1045,8 +1045,8 @@ class LinearTransformation(torch.nn.Module):
     original shape.
 
     Applications:
-        whitening transformation: Suppose X is a column vector zero-centered params.
-        Then compute the params covariance matrix [D x D] with torch.mm(X.t(), X),
+        whitening transformation: Suppose X is a column vector zero-centered config.
+        Then compute the config covariance matrix [D x D] with torch.mm(X.t(), X),
         perform SVD on this matrix and pass it as transformation_matrix.
 
     Args:
@@ -1423,7 +1423,7 @@ class RandomAffine(torch.nn.Module):
         """Get parameters for affine transformation
 
         Returns:
-            params to be passed to the affine transformation
+            config to be passed to the affine transformation
         """
         angle = float(torch.empty(1).uniform_(float(degrees[0]), float(degrees[1])).item())
         if translate is not None:
@@ -1623,7 +1623,7 @@ class RandomErasing(torch.nn.Module):
                 i.e. ``value[0]``.
 
         Returns:
-            tuple: params (i, j, h, w, v) to be passed to ``erase`` for random erasing.
+            tuple: config (i, j, h, w, v) to be passed to ``erase`` for random erasing.
         """
         img_c, img_h, img_w = img.shape[-3], img.shape[-2], img.shape[-1]
         area = img_h * img_w

@@ -11,20 +11,17 @@ from augment.transforms import AugTransform
 from augment.transforms_keypoints import AugKeypoints
 from utils.util import get_balance_weight, load_yaml, load_aug_config, path_join, display_config
 
+from tool.trainer.base_trainer import BaseTrainer
+from tool.trainer.segmentation_trainer import SegmantationTrainer
+from tool.trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
+from tool.trainer.embedding_trainer import EmbeddingTrainer
+
 
 class Model:
-    def __init__(self, config=None):
-        if config is None:
-            return
-
-        if isinstance(config, str):
-            self.config = load_yaml(config)
-            self.args = edict(self.config)
-
+    def __init__(self, args=None):
+        self.args = args
         self.ROOT = 'project'
-
         self.trainer = None
-
         self._init()
 
     def _update_args(self):
@@ -33,8 +30,11 @@ class Model:
 
         samples_per_cls = np.ones(self.args.classes) * 100
         samples_per_cls[0] = 90000
-        self.args.period_weights = get_balance_weight(0.95, samples_per_cls=samples_per_cls,
-                                                      classes=self.args.classes).cuda()
+
+        # yacs do not match np type or cuda type
+        self.period_weights = self.args.period_weights
+        self.period_weights = get_balance_weight(0.95, samples_per_cls=samples_per_cls,
+                                                 classes=self.args.classes)  # .cuda()
         self.args.period_n_min = 1 * self.args.input_h * self.args.input_w
         self.args.period_thresh = 0.9
 
@@ -79,7 +79,7 @@ class Model:
         if self.args.task_type == "classification":
             from tool.trainer.base_trainer import BaseTrainer
             self.trainer = BaseTrainer()
-            self.trainer.init_trainer(self.net,
+            self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
                                       self.train_data_path,
                                       self.val_data_path,
@@ -88,8 +88,8 @@ class Model:
                                       self.args.gpus,
                                       self.args.classes,
                                       self.args.batch_size,
-                                      self.worker,
-                                      tensorboard_save_path=path_join(self.ROOT, "params", "models/tensorboard"),
+                                      self.args.worker,
+                                      tensorboard_save_path=path_join(self.ROOT, "config", "models/tensorboard"),
                                       criterion_list=self.args.criterion_list,
                                       pretrained=False,
                                       args=self.args)
@@ -115,7 +115,7 @@ class Model:
                                       return_path=True,
                                       period_thresh=self.args.period_thresh,
                                       period_n_min=self.args.period_n_min,
-                                      period_weights=self.args.period_weights,
+                                      period_weights=self.period_weights,
                                       asymmetry_id=False,
                                       weight=self.args.class_weight,
                                       args=self.args)
@@ -123,7 +123,7 @@ class Model:
         elif self.args.task_type == "multilabel-classification":
             from tool.trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
             self.trainer = MultiLabelClassifyTrainer()
-            self.trainer.init_trainer(self.net,
+            self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
                                       self.train_data_path,
                                       self.val_data_path,
@@ -159,7 +159,7 @@ class Model:
                                       self.args.classes,
                                       self.args.batch_size,
                                       self.args.worker,
-                                      tensorboard_save_path=path_join(self.ROOT, "params", "models/tensorboard"),
+                                      tensorboard_save_path=path_join(self.ROOT, "config", "models/tensorboard"),
                                       criterion_list=self.args.criterion_list,
                                       pretrained=True,
                                       args=self.args)
@@ -223,7 +223,7 @@ class Model:
     #                                             self.normalize
     #                                             ])
     #
-    #     self.trainer.resume(self.dataRoot.replace("params", "models/checkpoint.pth.tar"), True)
+    #     self.trainer.resume(self.dataRoot.replace("config", "models/checkpoint.pth.tar"), True)
     #     self.trainer.check_data_conflict(self.args, tensor_transforms, "train")
     #
     # # network parser
@@ -242,7 +242,7 @@ class Model:
     #                                             self.normalize
     #                                             ])
     #
-    #     self.trainer.resume(self.dataRoot.replace("params", "models/checkpoint.pth.tar"), True)
+    #     self.trainer.resume(self.dataRoot.replace("config", "models/checkpoint.pth.tar"), True)
     #     self.trainer.check_data_conflict(self.args, tensor_transforms, "test")
 
     def splitUnknown(self, modelNameList, ):

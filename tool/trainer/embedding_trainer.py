@@ -229,8 +229,8 @@ class EmbeddingTrainer(abc.ABC):
                 progress.display(i)
                 print("lr:", self.optimizer_.param_groups[0]['lr'], "\n")
 
-                args.loss = losses.avg
-                args.trainAuc = top1.avg
+                # args.loss = losses.avg.item()
+                # args.trainAuc = top1.avg.item()
 
             # if (not args.control.projectOperater.automate) and \
             #         (not args.control.projectOperater.training):
@@ -571,7 +571,7 @@ class EmbeddingTrainer(abc.ABC):
         from export.shufflenetv2_embedding import shufflenet_v2_x1_0
 
         model = shufflenet_v2_x1_0(embedding_classes=args.classes)
-        model_path = args.data.replace("params", "models/checkpoint.pth.tar")
+        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
         checkpoint = torch.load(model_path)
         static_dict = checkpoint['state_dict']
         model.load_state_dict(static_dict, strict=True)
@@ -594,7 +594,7 @@ class EmbeddingTrainer(abc.ABC):
     @torch.no_grad()
     def check_data_conflict(self, args, transforms, tag="train"):
         # only check ok and ng conflicts
-        print("check {} params conflict...".format(tag))
+        print("check {} config conflict...".format(tag))
         if tag not in ["train", "test"]:
             raise ValueError("tag either be 'train' or 'test'!")
         self.model_.eval()

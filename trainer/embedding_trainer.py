@@ -51,7 +51,7 @@ class EmbeddingTrainer(abc.ABC):
         
         self.center_loss=CenterLoss(num_classes=classes,feat_dim=1024)
         self.center_loss_weight=0.5
-        self.optimizer_.add_param_group({'params':self.center_loss.parameters(),\
+        self.optimizer_.add_param_group({'config':self.center_loss.parameters(),\
                                             'lr':lr})
         self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
 
@@ -540,7 +540,7 @@ class EmbeddingTrainer(abc.ABC):
         from export.shufflenetv2_embedding import shufflenet_v2_x1_0
         
         model = shufflenet_v2_x1_0(embedding_classes=args.classes)
-        model_path=args.data.replace("params","models/checkpoint.pth.tar")
+        model_path=args.data.replace("config","models/checkpoint.pth.tar")
         checkpoint = torch.load(model_path) 
         static_dict = checkpoint['state_dict']
         model.load_state_dict(static_dict, strict=True)
@@ -563,7 +563,7 @@ class EmbeddingTrainer(abc.ABC):
     @torch.no_grad()
     def check_data_conflict(self,args,transforms,tag="train"):
         #only check ok and ng conflicts
-        print("check {} params conflict...".format(tag))
+        print("check {} config conflict...".format(tag))
         if tag not in ["train","test"]:
             raise ValueError("tag either be 'train' or 'test'!")
         self.model_.eval()

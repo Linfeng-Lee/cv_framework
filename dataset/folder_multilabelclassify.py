@@ -29,7 +29,7 @@ def save_dict(filename, dic):
         json.dump(dic, json_file, ensure_ascii=False, cls=JsonEncoder)
 
 class DatasetFolder(VisionDatasetBase):
-    """A generic params loader where the samples are arranged in this way: ::
+    """A generic config loader where the samples are arranged in this way: ::
 
         root/class_x/xxx.ext
         root/class_x/xxy.ext
@@ -221,7 +221,7 @@ class DatasetFolder(VisionDatasetBase):
         return len(self.samples)
 
 class ImageFolder(DatasetFolder):
-    """A generic params loader where the images are arranged in this way: ::
+    """A generic config loader where the images are arranged in this way: ::
 
         root/dog/xxx.png
         root/dog/xxy.png

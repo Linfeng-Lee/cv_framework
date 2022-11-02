@@ -8,6 +8,18 @@ import json
 import io
 import base64
 from PIL import Image
+import math
+
+
+def auto_mkdir_project(project_name: str):
+    sub_dir = ['export', 'runs', 'weights', 'log']
+    dirs = [path_join('project', project_name, item) for item in sub_dir]
+    for d in dirs:
+        if os.path.exists(d):
+            continue
+        os.mkdir(d)
+    logger.info(f'Create {project_name}')
+
 
 def get_labelme_ann(image, seg, labelmap, cls_):
     json_data = {}
@@ -44,6 +56,7 @@ def get_labelme_ann(image, seg, labelmap, cls_):
     json_data["imageWidth"] = w
 
     return json_data
+
 
 def get_images(path, ext=None):
     if ext is None:
@@ -103,7 +116,7 @@ def path_join(*path):
     return os.path.join(*path)
 
 
-def load_aug_config(params: dict) -> list:
+def load_aug_config(params) -> list:
     use_aug_params = [k for k, v in params.items() if v]
     return use_aug_params
 
@@ -147,7 +160,6 @@ def get_balance_weight(beta, samples_per_cls, classes):
     effective_num = 1.0 - np.power(beta, samples_per_cls)
     weights = (1.0 - beta) / np.array(effective_num)
     weights = weights / np.sum(weights) * classes
-
     weights = torch.tensor(weights).float()
     return weights
 
