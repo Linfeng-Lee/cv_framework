@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image, ImageFile
 from loguru import logger
+from torchvision import transforms
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -27,6 +28,7 @@ from loss.center_loss import CenterLoss
 
 class EmbeddingTrainer(abc.ABC):
     def __init__(self):
+        self.args = None
         self.model_ = None
         self.optimizer_ = None
         self.train_loader_ = None
@@ -461,7 +463,7 @@ class EmbeddingTrainer(abc.ABC):
 
             print("平均耗时：{}".format(np.array(cost_time).sum() / len(cost_time)))
 
-    def validate(self, epoch, top_k, args, **kwargs):
+    def validate(self, epoch: int, top_k: int, args, **kwargs):
         """
         此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
         Args:
@@ -512,15 +514,15 @@ class EmbeddingTrainer(abc.ABC):
                 batch_time.update(time.time() - end)
                 end = time.time()
 
+                _top1 = round(float(acc1[0]), 4)
+                _topn = round(float(acc5[0]), 4)
+                _losses = round(float(losses.avg), 4)
                 if i % args.print_freq == 0:
-                    progress.display(i)
-                # if (not args.control.projectOperater.automate) and \
-                #                     (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
-                #     break
-            # TODO: 返回top几的准确度
-            print(' * Acc@1 {top1.avg:.3f} {top_str} {top.avg:.3f}'
-                  .format(top1=top1, top_str=topn_str, top=topn))
+                    logger.debug(f'top1:{_top1} | top5:{_topn} | loss: {_losses}')
 
+            _top1 = round(float(acc1[0]), 4)
+            _topn = round(float(acc5[0]), 4)
+            logger.info(f'Acc@1:{top1.avg} | topn:{topn.avg}')
         self.writer.add_scalar("val_acc1", top1.avg, epoch)
 
         # args.control.projectOperater.testAcu=top1.avg
@@ -549,33 +551,6 @@ class EmbeddingTrainer(abc.ABC):
         else:
             # print(cur_output.sum())
             return True
-
-    def export_torchscript(self, args, save_path):
-        print("export torchscript...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
-
-        from export.shufflenetv2_embedding import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(embedding_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-
-        model.cuda()
-        model.eval()
-
-        torchscript = torch.jit.trace(model, rand_input, strict=False)
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
-                                                           str(args.classes), \
-                                                           str(args.input_w), \
-                                                           str(args.input_h), \
-                                                           date)
-        torchscript.save(os.path.join(save_path, file_name))
-        print("ok")
 
     @torch.no_grad()
     def check_data_conflict(self, args, transforms, tag="train"):
@@ -621,3 +596,27 @@ class EmbeddingTrainer(abc.ABC):
                 if file_extend in ["jpg", "png", "jpeg"]:
                     ret.append(os.path.join(root, file))
         return ret
+
+    def test(self):
+        ...
+
+    def _preprocess(self, image):
+        # preprocess
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        normalize = transforms.Normalize(mean=mean,
+                                         std=std)
+        transforms_ = transforms.Compose([
+            transforms.Resize((self.args.input_h, self.args.input_w)),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        img = cv2.imread(image)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_color = Image.fromarray(img)
+        inputs = transforms_(img_color)
+        inputs = inputs.unsqueeze(0)
+        if torch.cuda.is_available():
+            inputs = inputs.cuda()
+
+        return inputs

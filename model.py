@@ -73,6 +73,8 @@ class Model:
         assert os.path.exists(self.train_data_path)
         assert os.path.exists(self.val_data_path)
 
+        _TASK_TYPE = ['classification', 'segmentation', 'multilabel-classification', 'embedding-classification']
+
         if self.args.task_type == "classification":
             from trainer.base_trainer import BaseTrainer
             self.trainer = BaseTrainer()
@@ -203,12 +205,6 @@ class Model:
         self.trainer.validate(0, 1, self.args)
         logger.info(f'{self.args.net} end test.')
 
-    # def export_model(self):
-    #     export_path = os.path.join(self.ROOT, self.args.project, 'export')
-    #
-    #     self.trainer.export_torchscript(self.args, export_path)
-    #     if self.args.task_type == "segmentation":
-    #         self.trainer.export_onnx(self.args, export_path)
 
     # def checkTrainDataConflict(self):
     #     self.control.projectOperater.dataCount = 0

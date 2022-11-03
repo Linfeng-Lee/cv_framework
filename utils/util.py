@@ -144,10 +144,16 @@ def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
         maxk = max(topk)
+
+        # output.size()=(bs,nc)
+        # target.size()=(bs,nc)
         batch_size = target.size(0)
 
+        # max_val,idx=touch.topk()
         _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
+        pred = pred.t()  # (bs,nc)->(nc,bs)
+        # target:(bs,nc)->(1,bsxnc)->(nc,bs)
+        #
         correct = pred.eq(target.view(1, -1).expand_as(pred))
 
         res = []
@@ -191,6 +197,7 @@ def vis_maps(img, predict, num_of_class, save_path):
     cv2.imwrite(save_path[:-4] + ".jpg", vis_addweight)
 
 
+# move to evaluation.py
 def accuracy_good_ng(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -238,6 +245,7 @@ def get_key(dct, value):
     return list(filter(lambda k: dct[k] == value, dct))
 
 
+# move to evaluation.py
 # accuracymultilabel
 def accuracymultilabel(output, target):
     with torch.no_grad():
@@ -267,3 +275,4 @@ def load_yaml(yaml_path: str) -> dict:
     with open(yaml_path, 'r', encoding='UTF-8') as f:
         conf = yaml.safe_load(f)
     return conf
+
