@@ -164,7 +164,11 @@ class ShuffleNetV2(nn.Module):
         return self._forward_impl(x)
 
 
-def _shufflenetv2(arch: str, pretrained: bool, progress: bool, *args: Any, **kwargs: Any) -> ShuffleNetV2:
+def _shufflenetv2(arch: str,
+                  pretrained: bool,
+                  progress: bool,
+                  *args: Any,
+                  **kwargs: Any) -> ShuffleNetV2:
     model = ShuffleNetV2(*args, **kwargs)
 
     if pretrained:

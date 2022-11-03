@@ -1,3 +1,4 @@
+import os
 import json
 import time
 from matplotlib import lines
@@ -6,12 +7,11 @@ import torch
 from torch import nn
 from tqdm import tqdm
 from loguru import logger
-from tool.trainer.base_trainer import BaseTrainer
+from trainer.base_trainer import BaseTrainer
 from dataset.data_pipe import get_loader_mask
 
 from utils.meter import AverageMeter
 from utils.meter import ProgressMeter
-import os
 from utils.meter import SegmentationEvaluator
 import numpy as np
 import shutil
@@ -202,7 +202,6 @@ class SegmantationTrainer(BaseTrainer):
             end = time.time()
 
             if i % args.print_freq == 0:
-                progress.display(i)
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss_mask = round(float(loss_mask_output_avg.avg), 6)
 

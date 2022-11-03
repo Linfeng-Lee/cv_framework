@@ -4,7 +4,9 @@ import datetime
 import cv2
 from tqdm import tqdm
 from typing import Any, Callable, Dict, List, Optional, Tuple
-# from augment import transforms as aug_transforms
+import sys
+sys.path.append('/home/lee/PycharmProjects/cv_framework/augment')
+from augment import aug_transforms
 from augment import aug_config
 from dataset.folder_base import VisionDatasetBase
 from dataset.folder_base import IMG_EXTENSIONS
