@@ -5,9 +5,9 @@ import numpy as np
 from loguru import logger
 from torchvision import transforms
 
-from aug_config import config_aug
-from augment.transforms import AugTransform
+from augment.aug_transforms import AugTransform
 from augment.transforms_keypoints import AugKeypoints
+from augment.aug_config import config_aug
 from utils.util import get_balance_weight, auto_mkdir_project, load_aug_config, display_config
 
 
@@ -74,7 +74,7 @@ class Model:
         assert os.path.exists(self.val_data_path)
 
         if self.args.task_type == "classification":
-            from tool.trainer.base_trainer import BaseTrainer
+            from trainer.base_trainer import BaseTrainer
             self.trainer = BaseTrainer()
             self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
@@ -92,7 +92,7 @@ class Model:
                                       args=self.args)
 
         elif self.args.task_type == "segmentation":
-            from tool.trainer.segmentation_trainer import SegmantationTrainer
+            from trainer.segmentation_trainer import SegmantationTrainer
             self.trainer = SegmantationTrainer()
             self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
@@ -119,7 +119,7 @@ class Model:
                                       args=self.args)
 
         elif self.args.task_type == "multilabel-classification":
-            from tool.trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
+            from trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
             self.trainer = MultiLabelClassifyTrainer()
             self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
@@ -146,7 +146,7 @@ class Model:
                                       args=self.args)
 
         elif self.args.task_type == "embedding-classification":
-            from tool.trainer.embedding_trainer import EmbeddingTrainer
+            from trainer.embedding_trainer import EmbeddingTrainer
             self.trainer = EmbeddingTrainer()
             self.trainer.init_trainer(self.args.net,
                                       self.args.lr,
@@ -246,7 +246,3 @@ class Model:
 
     def splitUnknown(self, modelNameList, ):
         pass
-
-    def run(self):
-        self.train()
-        logger.success('model启动成功!')

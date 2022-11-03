@@ -1,0 +1,37 @@
+project                     : deyuan_short_white
+net                         : shufflenet_v2_x1_0
+task_type                   : classification
+
+classes                     : 2
+data_root                   : /home/lee/data/deyuan/数据/short_white
+input_w                     : 288
+input_h                     : 320
+batch_size                  : 128
+start_epoch                 : 0
+epochs                      : 50
+balance_n_classes           : 2
+balance_n_samples           : 64
+resume                      : project/deyuan_short_white/weights/checkpoint.pth.tar
+device                      : gpu
+worker                      : 8
+seed                        : 0
+lr                          : 0.001
+criterion_list              : [CrossEntropyLoss]
+threshold                   : 0.5
+gpus                        : 0
+class_weight                : None
+
+augment:
+  crop                      : False
+  change_colorspace         : False
+  contrast_normalization    : True
+  gaussian_noise            : False
+  multiply                  : True
+  scale                     : True
+  rotate                    : True
+  shear                     : False
+  grayscale                 : False
+  hue_and_saturation        : True
+  flip_left_right           : True
+  flip_up_down              : True
+

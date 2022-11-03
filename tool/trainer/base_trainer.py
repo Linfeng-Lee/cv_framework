@@ -178,7 +178,7 @@ class BaseTrainer(abc.ABC):
 
             # ui display training progress
             # args.control.projectOperater.dataCount += 1 / (args.epochs * len(self.train_loader_))
-            args.dataCount += 1 / (args.epochs * len(self.train_loader_))
+            # args.data_count += 1 / (args.epochs * len(self.train_loader_))
 
             if i % args.print_freq == 0:
                 # 这里进行记录，是为了避免过多的数据跳动。

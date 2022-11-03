@@ -83,8 +83,8 @@ def export_onnx(args, weight: str, save_path: str):
     logger.success("ok")
 
 
-class ScriptModel():
-    def __init__(self, model_path, cls_, h, w):
+class ScriptModel:
+    def __init__(self, model_path:str, cls_, h:int, w:int):
         self.model = torch.jit.load(model_path)
         # checkpoint = torch.load(model_path) 
         # static_dict = checkpoint['state_dict']
@@ -92,7 +92,7 @@ class ScriptModel():
         self.h = h
         self.w = w
 
-    def inference(self, path):
+    def inference(self, path:str):
         self.model.cuda()
         self.model.eval()
         inputs = self._preprocess(path)
@@ -100,7 +100,7 @@ class ScriptModel():
 
         return outputs
 
-    def _preprocess(self, image):
+    def _preprocess(self, image:str):
         # preprocess
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
@@ -120,7 +120,7 @@ class ScriptModel():
 
         return inputs
 
-    def test_inference_time(self, batchsize, repeat_time=10):
+    def test_inference_time(self, batchsize:int, repeat_time:int=10):
         self.model.cuda()
         self.model.eval()
         for _ in range(repeat_time):

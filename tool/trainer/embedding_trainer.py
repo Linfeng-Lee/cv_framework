@@ -157,6 +157,7 @@ class EmbeddingTrainer(abc.ABC):
                 is_best,
                 save_path
             )
+
     def train_epoch(self, epoch, top_k, args, normalize_transpose=None):
         topn_str = "Acc@{}".format(top_k)
         batch_time = AverageMeter('Time', ':6.3f')
@@ -391,8 +392,17 @@ class EmbeddingTrainer(abc.ABC):
         mask_res_fs.close()
         img_mask_info_fs.close()
 
-    def test_img(self, show_channel, score_threshold, area_threshold, img_path_list, transforms, root_path, input_w,
-                 input_h, gpus, output_save_path="temp/output"):
+    def test_img(self,
+                 show_channel,
+                 score_threshold,
+                 area_threshold,
+                 img_path_list,
+                 transforms,
+                 root_path,
+                 input_w,
+                 input_h,
+                 gpus,
+                 output_save_path="temp/output"):
         """
         主要用在单通道的前景和背景目标的分割测试。偏向于为了测试误检。
         Args:

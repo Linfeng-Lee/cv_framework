@@ -130,9 +130,9 @@ class EmbeddingTrainer(abc.ABC):
                 }, is_best,save_path
             )
             
-            if (not args.control.projectOperater.automate) and \
-                (not args.control.projectOperater.training):
-                break     
+            # if (not args.control.projectOperater.automate) and \
+            #     (not args.control.projectOperater.training):
+            #     break
 
     def train_epoch(self, epoch, top_k, args, normalize_transpose=None):
         topn_str = "Acc@{}".format(top_k)
@@ -188,7 +188,7 @@ class EmbeddingTrainer(abc.ABC):
             end = time.time()
 
             #ui display training progress
-            args.control.projectOperater.dataCount += 1/(args.epochs* len(self.train_loader_))
+            # args.control.projectOperater.dataCount += 1/(args.epochs* len(self.train_loader_))
 
             if i % args.print_freq == 0:
                 #这里进行记录，是为了避免过多的数据跳动。
@@ -200,12 +200,12 @@ class EmbeddingTrainer(abc.ABC):
                 progress.display(i)
                 print("lr:",self.optimizer_.param_groups[0]['lr'],"\n")
 
-                args.control.projectOperater.loss=losses.avg
-                args.control.projectOperater.trainAcu=top1.avg
-
-            if (not args.control.projectOperater.automate) and \
-                                (not args.control.projectOperater.training):
-                break                                        
+            #     args.control.projectOperater.loss=losses.avg
+            #     args.control.projectOperater.trainAcu=top1.avg
+            #
+            # if (not args.control.projectOperater.automate) and \
+            #                     (not args.control.projectOperater.training):
+            #     break
 
     def test_mask(self, show_channel, score_threshold, area_threshold, args,
                   test_error_src_img_save_path="temp/origin_hard", test_res_img_save_path="temp/output",
@@ -497,16 +497,16 @@ class EmbeddingTrainer(abc.ABC):
 
                 if i % args.print_freq == 0:
                     progress.display(i)
-                if (not args.control.projectOperater.automate) and \
-                                    (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
-                    break        
+                # if (not args.control.projectOperater.automate) and \
+                #                     (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
+                #     break
             # TODO: 返回top几的准确度
             print(' * Acc@1 {top1.avg:.3f} {top_str} {top.avg:.3f}'
                   .format(top1=top1, top_str=topn_str, top=topn))
 
         self.writer.add_scalar("val_acc1", top1.avg, epoch)
 
-        args.control.projectOperater.testAcu=top1.avg
+        # args.control.projectOperater.testAcu=top1.avg
 
         return top1.avg
 
@@ -587,12 +587,12 @@ class EmbeddingTrainer(abc.ABC):
                     os.makedirs(dst_path)
                 shutil.move(p,dst_path)
                 
-            if (not args.control.projectOperater.checking_train) and \
-                (not args.control.projectOperater.checking_test):
-                print("abort")
-                return     
-            #ui display progress
-            args.control.projectOperater.dataCount += 1/len(image_paths)         
+            # if (not args.control.projectOperater.checking_train) and \
+            #     (not args.control.projectOperater.checking_test):
+            #     print("abort")
+            #     return
+            # #ui display progress
+            # args.control.projectOperater.dataCount += 1/len(image_paths)
 
         print("done")
 
