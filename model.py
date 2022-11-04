@@ -1,6 +1,6 @@
 import os
 import platform
-
+from typing import Union, List, Tuple, Callable
 import numpy as np
 from loguru import logger
 from torchvision import transforms
@@ -9,6 +9,12 @@ from augment.aug_transforms import AugTransform
 from augment.transforms_keypoints import AugKeypoints
 from augment.aug_config import config_aug
 from utils.util import get_balance_weight, auto_mkdir_project, load_aug_config, display_config
+
+from trainer.base_trainer import BaseTrainer
+from trainer.segmentation_trainer import SegmantationTrainer
+from trainer.embedding_trainer import EmbeddingTrainer
+from trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
+from trainer.multi_task_trainer import MultiTaskTrainer
 
 
 class Model:
@@ -73,7 +79,13 @@ class Model:
         assert os.path.exists(self.train_data_path)
         assert os.path.exists(self.val_data_path)
 
-        _TASK_TYPE = ['classification', 'segmentation', 'multilabel-classification', 'embedding-classification']
+        # trainer_func = {
+        #     'classification': BaseTrainer,
+        #     'segmentation': SegmantationTrainer,
+        #     'multilabel-classification': MultiLabelClassifyTrainer,
+        #     'embedding-classification': EmbeddingTrainer,
+        #
+        # }
 
         if self.args.task_type == "classification":
             from trainer.base_trainer import BaseTrainer
@@ -184,7 +196,7 @@ class Model:
 
         self.trainer.fit(start_epoch=self.args.start_epoch,
                          epochs=self.args.epochs,
-                         top_k=2,
+                         top_k=self.args.topk,
                          save_path=os.path.join(self.ROOT, self.args.project, 'models'),
                          normalize_transpose=self.normalize_transpose,
                          args=self.args)
@@ -202,9 +214,8 @@ class Model:
 
         logger.info(f'{self.args.net} end test.')
         self.trainer.resume(self.args.resume, True)
-        self.trainer.validate(0, 1, self.args)
+        self.trainer.test(self.args)
         logger.info(f'{self.args.net} end test.')
-
 
     # def checkTrainDataConflict(self):
     #     self.control.projectOperater.dataCount = 0
@@ -242,3 +253,18 @@ class Model:
 
     def splitUnknown(self, modelNameList, ):
         pass
+
+
+if __name__ == '__main__':
+    def add(a, b):
+        return a + b
+
+
+    def fun(data: Union[int, list, tuple], b: int, f: Callable):
+        print(type(data))
+        print(type(f))
+        a = f(data, b)
+        print(a)
+
+
+    fun(1, 2, add)

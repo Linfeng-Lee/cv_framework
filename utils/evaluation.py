@@ -1,18 +1,20 @@
 import torch
 import numpy as np
+from typing import Union
 
 
-def accuracy(pred: torch.Tensor, target: torch.Tensor, topk: int = 1, thresh: float = None):
-    assert isinstance(topk, (int, tuple))
+def accuracy(pred: torch.Tensor,
+             target: torch.Tensor,
+             topk: Union[int, list, tuple],
+             thresh: float = None) -> list:
+    assert isinstance(topk, (int, tuple, list))
+
     if isinstance(topk, int):
         topk = (topk,)
-        return_single = True
-    else:
-        return_single = False
 
     if pred.size(0) == 0:
         accu = [pred.new_tensor(0.) for i in range(len(topk))]
-        return accu[0] if return_single else accu
+        return accu
 
     maxk = max(topk)
     assert pred.ndim == 2 and target.ndim == 1
@@ -30,20 +32,27 @@ def accuracy(pred: torch.Tensor, target: torch.Tensor, topk: int = 1, thresh: fl
     for k in topk:
         correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
         res.append(correct_k.mul_(100.0 / bs))
-    return res[0] if return_single else res
+    return res
 
 
-def top1(pred: torch.Tensor, target: torch.Tensor, thresh: float = None) -> torch.Tensor:
+def top1(pred: torch.Tensor,
+         target: torch.Tensor,
+         thresh: float = None) -> list:
     return accuracy(pred, target, 1, thresh)
 
 
-def top5(pred: torch.Tensor, target: torch.Tensor, thresh: float = None) -> list:
+def top5(pred: torch.Tensor,
+         target: torch.Tensor,
+         thresh: float = None) -> list:
     return accuracy(pred, target, 5, thresh)
 
 
 # n:int or tuple
-def topn(pred: torch.Tensor, target: torch.Tensor, n, thresh: float = None) -> list:
-    return accuracy(pred, target, n, thresh)
+def topk(pred: torch.Tensor,
+         target: torch.Tensor,
+         k: Union[int, list, tuple],
+         thresh: float = None) -> list:
+    return accuracy(pred, target, k, thresh)
 
 
 def accuracymultilabel(output: torch.Tensor, target: torch.Tensor):

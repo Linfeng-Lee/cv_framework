@@ -2,7 +2,6 @@ from imgaug import augmenters as iaa
 from torchvision import transforms
 
 import sys
-print('aug_config sys.path:', sys.path)
 sys.path.append('/home/lee/PycharmProjects/cv_framework/augment')
 # from augment import transforms as aug_transforms
 # import transforms_op as aug_transforms

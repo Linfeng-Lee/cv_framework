@@ -2,6 +2,7 @@ import io
 import base64
 import json
 import shutil, os, glob
+import time
 
 import cv2
 import yaml
@@ -10,6 +11,11 @@ import numpy as np
 
 from loguru import logger
 from PIL import Image
+
+
+def get_time(fmt: str = '%Y/%m/%d [%H:%M:%S]'):
+    time_ = time.strftime(fmt, time.localtime())
+    print(time_)
 
 
 def auto_mkdir_project(project_name: str):
@@ -61,13 +67,12 @@ def get_labelme_ann(image, seg, labelmap, cls_):
 
 def get_images(path, ext=None):
     if ext is None:
-        ext = ['png']
+        ext = ["jpg", "png", "jpeg"]
 
     ret = []
     for root, dirs, files in os.walk(path):
         for file in files:
             file_extend = file.split(".")[-1]
-            # file_head = file.replace("."+file_extend,"")
             if file_extend in ext:
                 ret.append(os.path.join(root, file))
     return ret
@@ -111,10 +116,6 @@ def display_config(data):
 
     for k, v in data['augment'].items():
         logger.info('{:30} : {}'.format(k, v))
-
-
-# def path_join(path, *paths):
-#     return os.path.join(path, *paths)
 
 
 def load_aug_config(params) -> list:

@@ -1,6 +1,6 @@
 import abc, shutil, os, time, socket
 from datetime import datetime
-
+from typing import Union, Callable
 import torch
 from torchvision import datasets
 from tensorboardX import SummaryWriter
@@ -10,6 +10,8 @@ from tqdm import tqdm
 from PIL import Image, ImageFile
 from loguru import logger
 from torchvision import transforms
+from torch.optim.lr_scheduler import OneCycleLR
+from lr_scheduler.lr_adjustment import LambdaLR
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -20,14 +22,17 @@ from utils.util import accuracy
 from utils.util import get_key
 from utils.util import make_dir
 from utils.util import vis_maps
-from lr_scheduler.lr_adjustment import LambdaLR
+# from utils.util import get_image
+from utils.evaluation import top1, top5, topk
 from loss.loss_builder import build_loss
-from torch.optim.lr_scheduler import OneCycleLR
 from loss.center_loss import CenterLoss
 
 
 class EmbeddingTrainer(abc.ABC):
     def __init__(self):
+        self.test_loader_ = None
+        self.val_data_path = None
+        self.train_data_path = None
         self.args = None
         self.model_ = None
         self.optimizer_ = None
@@ -45,8 +50,8 @@ class EmbeddingTrainer(abc.ABC):
                      lr: float,
                      train_data_path: str,
                      val_data_path: str,
-                     train_transforms,
-                     val_transforms,
+                     train_transforms: Callable,
+                     val_transforms: Callable,
                      gpus: int,
                      classes: int,
                      batch_size: int,
@@ -55,18 +60,30 @@ class EmbeddingTrainer(abc.ABC):
                      pretrained: bool = False,
                      **kwargs):
         self.args = kwargs["args"]
+        self.train_data_path = train_data_path
+        self.val_data_path = val_data_path
         self.model_ = self.create_model(model_names, pretrained, embedding_classes=classes).cuda(gpus)
         self.optimizer_ = self.define_optimizer(lr)
-        self.train_loader_ = self.define_loader(train_data_path,
+
+        self.train_loader_ = self.define_loader(self.train_data_path,
                                                 train_transforms,
                                                 batch_size=batch_size,
                                                 num_workers=workers,
                                                 shuffle=True)
-        self.val_loader_ = self.define_loader(val_data_path,
+        self.val_loader_ = self.define_loader(self.val_data_path,
                                               val_transforms,
                                               batch_size=batch_size,
                                               num_workers=workers,
                                               shuffle=True)
+        test_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((self.args.input_h, self.args.input_w)),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        self.test_loader_ = self.define_loader(self.val_data_path,
+                                               test_transforms,
+                                               batch_size=self.args.test_batch_size,
+                                               num_workers=workers)
         self.criterion = self.define_criterion(criterion_list, gpus)
         self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
 
@@ -112,7 +129,7 @@ class EmbeddingTrainer(abc.ABC):
         optimizer = torch.optim.AdamW(self.model_.parameters(), lr=lr)
         return optimizer
 
-    def define_loader(self, path: str, trans, **kwargs):
+    def define_loader(self, path: str, trans: Callable, **kwargs):
         dataset_img = datasets.ImageFolder(path, transform=trans)
         data_loader = torch.utils.data.DataLoader(dataset_img, **kwargs)
         return data_loader
@@ -128,13 +145,21 @@ class EmbeddingTrainer(abc.ABC):
     #     return lr_scheduler
 
     def define_lr_scheduler(self, optimizer):
-        lrs = OneCycleLR(optimizer, max_lr=self.args.lr, steps_per_epoch=len(self.train_loader_),
+        lrs = OneCycleLR(optimizer,
+                         max_lr=self.args.lr,
+                         steps_per_epoch=len(self.train_loader_),
                          epochs=self.args.epochs,
                          pct_start=0.2)
 
         return lrs
 
-    def fit(self, start_epoch: int, epochs: int, top_k: int, args, save_path: str, **kwargs):
+    def fit(self,
+            start_epoch: int,
+            epochs: int,
+            top_k: Union[int, list, tuple],
+            save_path: str,
+            args,
+            **kwargs):
         best_acc = 0.5
         for epoch in range(start_epoch, epochs):
             # self.lr_scheduler_.step()
@@ -149,28 +174,31 @@ class EmbeddingTrainer(abc.ABC):
                     "best_acc1": top1_acc,
                 }, is_best, save_path
             )
+            logger.debug(f'[Training] | '
+                         f'[{epoch}/{self.args.epochs}] | '
+                         f'Acc@1:{top1_acc} | '
+                         f'Best Acc@1:{best_acc}')
 
-    def train_epoch(self, epoch: int, top_k: int, args, normalize_transpose=None):
-        topn_str = "Acc@{}".format(top_k)
-        batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
-        losses = AverageMeter('Loss', ':.4e')
-        top1 = AverageMeter('Acc@1', ':6.2f')
-        topn = AverageMeter(topn_str, ':6.2f')
-        progress = ProgressMeter(
-            len(self.train_loader_),
-            [batch_time, data_time, losses, top1, topn],
-            prefix="Epoch: [{}]".format(epoch))
+    def train_epoch(self, epoch: int,
+                    top_k: Union[int, list, tuple],
+                    args,
+                    normalize_transpose: Callable = None):
+
+        if isinstance(top_k, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in top_k]
+        else:
+            topn = [AverageMeter(f'Acc@{top_k}')]
+
+        losses = AverageMeter(f'loss')
 
         self.model_.train()
+
         train_len = len(self.train_loader_)
         start_iter = epoch * train_len
-        end = time.time()
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
 
         pbar = tqdm(enumerate(self.train_loader_), total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
         for i, (images, target) in pbar:
-            data_time.update(time.time() - end)
             if torch.cuda.is_available():
                 images = images.cuda(args.gpus)
                 target = target.cuda(args.gpus, non_blocking=True)
@@ -196,27 +224,103 @@ class EmbeddingTrainer(abc.ABC):
             self.optimizer_.step()
             self.lr_scheduler_.step()
 
-            acc1, acc5 = accuracy(output, binary_target, topk=(1, top_k))
-            losses.update(loss.item(), images.size(0))
-            top1.update(acc1[0], images.size(0))
-            topn.update(acc5[0], images.size(0))
+            # compute topk
+            acc = topk(output, binary_target, k=top_k)
 
-            batch_time.update(time.time() - end)
-            end = time.time()
+            losses.update(loss.item(), images.size(0))
+
+            for j in range(len(top_k)):
+                topn[j].update(acc[j], images.size(0))
 
             if i % args.print_freq == 0:
-                # 这里进行记录，是为了避免过多的数据跳动。
                 origin_input = normalize_transpose(images)
                 origin_input = np.array(origin_input.cpu().detach().numpy(), dtype=np.uint8)
                 self.writer.add_images('input_img', origin_input, (start_iter + i))
                 self.writer.add_scalar("train_loss", losses.avg, (start_iter + i))
-                self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
+                # self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
+                for k in range(len(top_k)):
+                    self.writer.add_scalar(f"train_acc{k}", topn[k].avg, (start_iter + i))
 
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss = round(float(losses.avg), 6)
-                _acc1 = round(float(top1.avg), 4)
 
-                logger.debug(f'[{epoch}/{self.args.epochs}] | Loss:{_loss} | lr:{_lr} | Acc@1:{_acc1}')
+                # e.g. top_k=(1,5) -> Acc@1:99.98 | Acc@5: 100:00
+                topn_str = ''
+                for k in topn:
+                    topn_str += f' | {k.name}:{round(float(k.avg), 4)}'
+
+                logger.debug(f'[Training] | '
+                             f'[{epoch}/{self.args.epochs}] | '
+                             f'{losses.name}:{_loss} | '
+                             f'lr:{_lr}' +
+                             topn_str)
+
+    def validate(self, epoch: int, top_k: Union[int, list, tuple], args, **kwargs):
+        """
+        此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
+        Args:
+            top_k: 进行验证的类别top几分数
+            args: 进行预测的参数配置
+        Returns:
+        """
+
+        if isinstance(top_k, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in top_k]
+        else:
+            topn = [AverageMeter(f'Acc@{top_k}')]
+
+        losses = AverageMeter('Loss', )
+
+        self.model_.eval()
+
+        with torch.no_grad():
+            pbar = tqdm(enumerate(self.train_loader_),
+                        total=len(self.val_loader_),
+                        bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+            for i, sample in pbar:
+                # for i, sample in enumerate(self.val_loader_):
+                if len(sample) == 2:
+                    images, target = sample
+                else:
+                    images, target = sample[:2]
+
+                if torch.cuda.is_available():
+                    images = images.cuda(args.gpus)
+                    target = target.cuda(args.gpus, non_blocking=True)
+
+                output, output_emb = self.model_(images)
+
+                binary_target = torch.zeros_like(target)
+                binary_target[target > 0] = 1
+                loss_cls = self.criterion[0](output, binary_target)
+                loss_emb = self.criterion[0](output_emb, target)
+                loss_cl = self.center_loss(self.model_.embedding, target)
+
+                loss = loss_cls + (loss_emb + self.center_loss_weight * loss_cl)
+                losses.update(loss.item(), images.size(0))
+
+                acc = topk(output, binary_target, k=top_k)
+                for j in range(len(top_k)):
+                    topn[j].update(acc[j], images.size(0))
+
+                topn_str = ''
+                for n in topn:
+                    topn_str += f' | {n.name}:{round(float(n.avg), 4)}'
+
+                # display
+                if i % args.print_freq == 0:
+                    logger.debug(f'[Val] | '
+                                 f'{losses.name}: {round(float(losses.avg), 4)}' +
+                                 topn_str)
+            # display
+            topn_str = ''
+            for n in topn:
+                topn_str += f' | {n.name}:{round(float(n.avg), 4)}'
+            logger.info(f'[Val] | ' + topn_str)
+
+        self.writer.add_scalar("val_acc1", top1.avg, epoch)
+
+        return top1.avg
 
     def test_mask(self,
                   show_channel,
@@ -377,8 +481,17 @@ class EmbeddingTrainer(abc.ABC):
         mask_res_fs.close()
         img_mask_info_fs.close()
 
-    def test_img(self, show_channel, score_threshold, area_threshold, img_path_list, transforms, root_path, input_w,
-                 input_h, gpus, output_save_path="temp/output"):
+    def test_img(self,
+                 show_channel,
+                 score_threshold: float,
+                 area_threshold: float,
+                 img_path_list: list,
+                 transforms,
+                 root_path: str,
+                 input_w: int,
+                 input_h: int,
+                 gpus: int,
+                 output_save_path: str = "temp/output"):
         """
         主要用在单通道的前景和背景目标的分割测试。偏向于为了测试误检。
         Args:
@@ -436,7 +549,14 @@ class EmbeddingTrainer(abc.ABC):
                     shutil.copy(img_src_path, output_save_path)
             print("误割数据量为{}，比例为：{}".format(error_mask_num, error_mask_num / len(img_path_list)))
 
-    def test_full_segmentation(self, transforms, root_path, input_w, input_h, gpus, classes,
+    # no need
+    def test_full_segmentation(self,
+                               transforms,
+                               root_path,
+                               input_w,
+                               input_h,
+                               gpus,
+                               classes,
                                output_save_path="temp/output"):
         self.model_.eval()
         cost_time = []
@@ -462,72 +582,6 @@ class EmbeddingTrainer(abc.ABC):
                         vis_maps(img_pil, mask, classes, save_name)
 
             print("平均耗时：{}".format(np.array(cost_time).sum() / len(cost_time)))
-
-    def validate(self, epoch: int, top_k: int, args, **kwargs):
-        """
-        此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
-        Args:
-            top_k: 进行验证的类别top几分数
-            args: 进行预测的参数配置
-        Returns:
-        """
-
-        topn_str = "Acc@{}".format(top_k)
-        batch_time = AverageMeter('Time', ':6.3f')
-        losses = AverageMeter('Loss', ':.4e')
-        top1 = AverageMeter('Acc@1', ':6.2f')
-        topn = AverageMeter(topn_str, ':6.2f')
-        progress = ProgressMeter(
-            len(self.val_loader_),
-            [batch_time, losses, top1, topn],
-            prefix='Test: ')
-
-        self.model_.eval()
-
-        with torch.no_grad():
-            end = time.time()
-            for i, sample in enumerate(self.val_loader_):
-                if len(sample) == 2:
-                    images, target = sample
-                else:
-                    images, target = sample[:2]
-
-                if torch.cuda.is_available():
-                    images = images.cuda(args.gpus)
-                    target = target.cuda(args.gpus, non_blocking=True)
-
-                output, output_emb = self.model_(images)
-
-                binary_target = torch.zeros_like(target)
-                binary_target[target > 0] = 1
-                loss_cls = self.criterion[0](output, binary_target)
-                loss_emb = self.criterion[0](output_emb, target)
-                loss_cl = self.center_loss(self.model_.embedding, target)
-
-                loss = loss_cls + (loss_emb + self.center_loss_weight * loss_cl)
-
-                acc1, acc5 = accuracy(output, binary_target, topk=(1, top_k))
-                losses.update(loss.item(), images.size(0))
-                top1.update(acc1[0], images.size(0))
-                topn.update(acc5[0], images.size(0))
-
-                batch_time.update(time.time() - end)
-                end = time.time()
-
-                _top1 = round(float(acc1[0]), 4)
-                _topn = round(float(acc5[0]), 4)
-                _losses = round(float(losses.avg), 4)
-                if i % args.print_freq == 0:
-                    logger.debug(f'top1:{_top1} | top5:{_topn} | loss: {_losses}')
-
-            _top1 = round(float(acc1[0]), 4)
-            _topn = round(float(acc5[0]), 4)
-            logger.info(f'Acc@1:{top1.avg} | topn:{topn.avg}')
-        self.writer.add_scalar("val_acc1", top1.avg, epoch)
-
-        # args.control.projectOperater.testAcu=top1.avg
-
-        return top1.avg
 
     def judge_cycle_mask_train(self, output, mask, area_threshold=100, judge_channel=0, target_id=0):
         """
@@ -579,26 +633,55 @@ class EmbeddingTrainer(abc.ABC):
                     os.makedirs(dst_path)
                 shutil.move(p, dst_path)
 
-            # if (not args.control.projectOperater.checking_train) and \
-            #     (not args.control.projectOperater.checking_test):
-            #     print("abort")
-            #     return
-            # #ui display progress
-            # args.control.projectOperater.dataCount += 1/len(image_paths)
-
         print("done")
 
-    def _get_images(self, path):
-        ret = []
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                file_extend = file.split(".")[-1]
-                if file_extend in ["jpg", "png", "jpeg"]:
-                    ret.append(os.path.join(root, file))
-        return ret
+    def test(self, args):
+        top_k = args.topk
+        if isinstance(top_k, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in top_k]
+        else:
+            topn = [AverageMeter(f'Acc@{top_k}')]
 
-    def test(self):
-        ...
+        # images = get_image(self.val_data_path)
+
+        self.model_.eval()
+        with torch.no_grad():
+            pbar = tqdm(enumerate(self.test_loader_), total=len(self.test_loader_))
+            for i, sample in pbar:
+                if len(sample) == 2:
+                    images, target = sample
+                else:
+                    images, target = sample[:2]
+
+                if torch.cuda.is_available():
+                    images = images.cuda(args.gpus)
+                    target = target.cuda(args.gpus, non_blocking=True)
+
+                # gs_score = output.softmax(dim=1)[0][0].detach().cpu().item()
+                # print(gs_score)
+                # emb = output_emb[0].detach().cpu().numpy()
+                # exit()
+
+                binary_target = torch.zeros_like(target)
+                binary_target[target > 0] = 1
+                outputs, output_emb = self.model_(images)
+
+
+                output = outputs[0].cpu()
+                idx = torch.argmax(output, dim=0)
+                pred = output[idx].softmax(0).cpu().item()
+                binary_target_ = binary_target.cpu().item()
+                # print(f'target: {binary_target_} | pred_cls :{idx} pred: {pred} ')
+
+                acc = topk(outputs, binary_target, k=top_k)
+
+                for j in range(len(top_k)):
+                    topn[j].update(acc[j], images.size(0))
+                topn_str = ''
+                for n in topn:
+                    topn_str += f' | {n.name} : {round(float(n.avg), 4)}'
+                # torch.cuda.synchronize()
+            logger.debug(f'[Test] | ' + topn_str)
 
     def _preprocess(self, image):
         # preprocess

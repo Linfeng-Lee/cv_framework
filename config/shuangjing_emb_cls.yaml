@@ -9,6 +9,7 @@ input_w                     : 320
 input_h                     : 192
 classes                     : 11
 batch_size                  : 128
+test_batch_size             : 1
 start_epoch                 : 0
 epochs                      : 50
 balance_n_classes           : 8
@@ -19,12 +20,14 @@ worker                      : 8
 seed                        : 0
 lr                          : 0.001
 criterion_list              : [ CrossEntropyLoss ]
-threshold                   : 0.5
+threshold                   : 0.9
 gpus                        : 0
 class_weight                : [ ]
 period_weights              : 0.0 #auto update
 period_thresh               : 0.0 #auto update
 period_n_min                : 0 #auto update
+emb_template_path           : 'project/shuangjing/export/template_norm_2022-11-2.json'
+topk                        : [1]
 
 #Display & Save
 print_freq                  : 10 #sec
