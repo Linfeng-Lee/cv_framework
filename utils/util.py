@@ -3,7 +3,7 @@ import base64
 import json
 import shutil, os, glob
 import time
-
+from datetime import datetime
 import cv2
 import yaml
 import torch
@@ -13,9 +13,57 @@ from loguru import logger
 from PIL import Image
 
 
-def get_time(fmt: str = '%Y/%m/%d [%H:%M:%S]'):
+# TODO
+
+def load_checkpoint(weight: str):
+    checkpoint = torch.load(weight)
+    return checkpoint
+
+
+def load_weight(model, weight: str, strict: bool = False):
+    """
+    just load model state_dict
+    """
+    if os.path.exists(weight):
+        checkpoint = torch.load(weight)
+        static_dict = checkpoint.get('state_dict')
+        model.load_state_dict(static_dict, strict=strict)
+        logger.success(f"{weight} 权重resume成功。")
+    else:
+        logger.warning(f"{weight} 权重文件不存在。")
+
+
+def load_loss(loss, weight, strict: False):
+    checkpoint = torch.load(weight)
+    center_loss_para = checkpoint['center_loss']
+    loss.load_state_dict(center_loss_para, strict=strict)
+    logger.success(f"loss update.")
+
+
+def save_weight(state_dict: dict, path: str):
+    cur_time = get_time()
+    filename = os.path.join(path, cur_time + '_checkpoint.pth')
+    if not os.path.exists(path):
+        os.mkdir(path)
+        logger.info("create path {path} to save checkpoint.")
+    torch.save(state_dict, filename)
+
+
+# def resume(model, model_path: str, strict: bool = False, **kwargs):
+#     if os.path.exists(model_path):
+#         checkpoint = torch.load(model_path)
+#         static_dict = checkpoint['state_dict']
+#         model.load_state_dict(static_dict, strict=strict)
+#         center_loss_para = checkpoint['center_loss']
+#         center_loss.load_state_dict(center_loss_para, strict=strict)
+#         print("{} 权重resume成功。".format(model_path))
+#     else:
+#         print("{} 权重文件不存在。".format(model_path)
+
+
+def get_time(fmt: str = '%Y-%m-%d-(%H:%M:%S)'):
     time_ = time.strftime(fmt, time.localtime())
-    print(time_)
+    return time_
 
 
 def auto_mkdir_project(project_name: str):
@@ -277,3 +325,8 @@ def load_yaml(yaml_path: str) -> dict:
         conf = yaml.safe_load(f)
     return conf
 
+
+if __name__ == '__main__':
+    t1 = get_time()
+    print(t1)
+    print(type(t1))

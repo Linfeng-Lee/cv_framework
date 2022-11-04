@@ -1,16 +1,19 @@
 import abc, shutil, os, time, socket
 from datetime import datetime
 from typing import Union, Callable
-import torch
-from torchvision import datasets
-from tensorboardX import SummaryWriter
+
 import cv2
+import torch
 import numpy as np
 from tqdm import tqdm
+from torch.utils.data import DataLoader
+from torchvision import datasets
+from tensorboardX import SummaryWriter
 from PIL import Image, ImageFile
 from loguru import logger
 from torchvision import transforms
 from torch.optim.lr_scheduler import OneCycleLR
+
 from lr_scheduler.lr_adjustment import LambdaLR
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -97,7 +100,7 @@ class EmbeddingTrainer(abc.ABC):
         model = network.__dict__[model_names](pretrained=pretrained, **kwargs)
         return model
 
-    def resume(self, model_path: str = "temp/weights/checkpoint.pth.tar", strict: bool = False, **kwargs):
+    def resume(self, model_path: str, strict: bool = False, **kwargs):
         if os.path.exists(model_path):
             checkpoint = torch.load(model_path)
             static_dict = checkpoint['state_dict']
@@ -108,7 +111,7 @@ class EmbeddingTrainer(abc.ABC):
         else:
             print("{} 权重文件不存在。".format(model_path))
 
-    def save_checkpoint(self, state, is_best: bool, save_path: str = "temp/weights"):
+    def save_checkpoint(self, state: dict, is_best: bool, save_path: str = "temp/weights"):
         filename = os.path.join(save_path, "checkpoint.pth.tar")
         if not os.path.exists(save_path):
             os.mkdir(save_path)
@@ -172,7 +175,9 @@ class EmbeddingTrainer(abc.ABC):
                     "epoch": epoch + 1,
                     "state_dict": self.model_.state_dict(),
                     "best_acc1": top1_acc,
-                }, is_best, save_path
+                },
+                is_best,
+                save_path
             )
             logger.debug(f'[Training] | '
                          f'[{epoch}/{self.args.epochs}] | '
@@ -666,7 +671,6 @@ class EmbeddingTrainer(abc.ABC):
                 binary_target[target > 0] = 1
                 outputs, output_emb = self.model_(images)
 
-
                 output = outputs[0].cpu()
                 idx = torch.argmax(output, dim=0)
                 pred = output[idx].softmax(0).cpu().item()
@@ -681,7 +685,7 @@ class EmbeddingTrainer(abc.ABC):
                 for n in topn:
                     topn_str += f' | {n.name} : {round(float(n.avg), 4)}'
                 # torch.cuda.synchronize()
-            logger.debug(f'[Test] | ' + topn_str)
+            logger.debug(f'[Test]' + topn_str)
 
     def _preprocess(self, image):
         # preprocess

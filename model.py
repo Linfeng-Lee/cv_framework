@@ -79,14 +79,6 @@ class Model:
         assert os.path.exists(self.train_data_path)
         assert os.path.exists(self.val_data_path)
 
-        # trainer_func = {
-        #     'classification': BaseTrainer,
-        #     'segmentation': SegmantationTrainer,
-        #     'multilabel-classification': MultiLabelClassifyTrainer,
-        #     'embedding-classification': EmbeddingTrainer,
-        #
-        # }
-
         if self.args.task_type == "classification":
             from trainer.base_trainer import BaseTrainer
             self.trainer = BaseTrainer()

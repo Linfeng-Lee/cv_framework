@@ -2,11 +2,11 @@ from imgaug import augmenters as iaa
 from torchvision import transforms
 
 import sys
+
 sys.path.append('/home/lee/PycharmProjects/cv_framework/augment')
 # from augment import transforms as aug_transforms
 # import transforms_op as aug_transforms
 import aug_transforms
-
 
 
 def config_aug(input_h, input_w, augment_set):
@@ -36,12 +36,15 @@ def config_aug(input_h, input_w, augment_set):
                 children.append(method)
 
     iaa_aug_seq = iaa.Sequential(
-        [iaa.SomeOf((0, None), children, random_order=True), iaa.Resize({"height": input_h, "width": input_w})])
+        [
+            iaa.SomeOf((0, None), children, random_order=True),
+            iaa.Resize({"height": input_h, "width": input_w})
+        ]
+    )
 
     # 彩色图使用此值
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
-    normalize = transforms.Normalize(mean=mean,
-                                     std=std)
+    normalize = transforms.Normalize(mean=mean, std=std)
     normalize_transpose = aug_transforms.NormalizeTranspose(mean=mean, std=std)
     return iaa_aug_seq, normalize, normalize_transpose
