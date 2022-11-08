@@ -1,5 +1,6 @@
 import time
 import sys
+from typing import Callable
 import torch
 from torch import nn
 import numpy as np
@@ -16,10 +17,45 @@ from PIL import Image
 import shutil
 from torch.optim.lr_scheduler import OneCycleLR
 
+
 class MultiLabelClassifyTrainer(BaseTrainer):
     def __init__(self):
         super(MultiLabelClassifyTrainer, self).__init__()
         # self.train_loader_remove_no_json_ = None
+
+    def init_trainer_v2(self,
+                        args,
+                        train_transform: Callable,
+                        tensor_transform: Callable,
+                        tensorboard_save_path: str = 'temp/tensorboard',
+                        **kwargs
+                        ):
+        self.args = args
+
+        # self.args = kwargs["args"]
+        self.model_ = self.create_model(self.args.net,
+                                        self.args.pretrained,
+                                        num_classes=self.args.classes).cuda(self.args.gpus)
+        self.optimizer_ = self.define_optimizer(self.args.lr)
+        self.train_loader_ = get_loader_multi_label_class(self.args.train_data_path,
+                                                          train_transform,
+                                                          self.args.balance_n_classes,
+                                                          self.args.balance_n_samples,
+                                                          self.args.class_id_map_save_path,
+                                                          tensor_transform, )
+
+        self.val_loader_ = get_loader_multi_label_class(self.args.val_data_path,
+                                                        tensor_transform,
+                                                        self.args.balance_n_classes,
+                                                        self.args.balance_n_samples,
+                                                        self.args.class_id_map_save_path,
+                                                        tensor_transform,
+                                                        is_training=False)
+
+        self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
+        self.criterion = self.define_criterion(self.args.criterion_list, self.args.gpus, **kwargs)
+        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
+        # self.judge_cycle_train = judge_cycle_train
 
     def init_trainer(self,
                      model_names: str,
@@ -34,32 +70,40 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                      pretrained: bool = False,
                      judge_cycle_train: bool = False,
                      **kwargs):
-        self.epoches = kwargs["epoches"]
+        self.epochs = kwargs["epoches"]
         self.args = kwargs["args"]
         self.lr = lr
         self.model_ = self.create_model(model_names, pretrained, num_classes=classes).cuda(gpus)
         self.optimizer_ = self.define_optimizer(lr)
         self.classify_transform = classify_transform
-        self.train_loader_ = get_loader_multi_label_class(train_data_path, classify_transform,
+        self.train_loader_ = get_loader_multi_label_class(train_data_path,
+                                                          classify_transform,
                                                           kwargs["balance_n_classes"],
-                                                          kwargs["balance_n_samples"], kwargs["class_id_map_save_path"],
-                                                          kwargs["tensor_transform"], kwargs["weights"])
-        self.val_loader_ = get_loader_multi_label_class(val_data_path, kwargs["tensor_transform"],
+                                                          kwargs["balance_n_samples"],
+                                                          kwargs["class_id_map_save_path"],
+                                                          kwargs["tensor_transform"],
+                                                          kwargs["weights"])
+        self.val_loader_ = get_loader_multi_label_class(val_data_path,
+                                                        kwargs["tensor_transform"],
                                                         kwargs["balance_n_classes"],
-                                                        kwargs["balance_n_samples"], kwargs["class_id_map_save_path"],
-                                                        kwargs["tensor_transform"], kwargs["weights"],
+                                                        kwargs["balance_n_samples"],
+                                                        kwargs["class_id_map_save_path"],
+                                                        kwargs["tensor_transform"],
+                                                        kwargs["weights"],
                                                         is_training=False)
         self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
         self.criterion = self.define_criterion(criterion_list, gpus, **kwargs)
         self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
         self.judge_cycle_train = judge_cycle_train
 
-    def fit(self, start_epoch: int, epochs: int, top_k: int, args, save_path: str, **kwargs):
+    def fit(self,
+            save_path: str,
+            **kwargs):
         best_acc = 0.5
-        for epoch in range(start_epoch, epochs):
+        for epoch in range(self.args.start_epoch, self.args.epochs):
             # self.lr_scheduler_.step()
-            self.train_epoch(epoch, top_k, args, **kwargs)
-            top1_acc = self.validate(epoch, top_k, args)
+            self.train_epoch(epoch, **kwargs)
+            top1_acc = self.validate(epoch)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
             self.save_checkpoint(
@@ -79,21 +123,16 @@ class MultiLabelClassifyTrainer(BaseTrainer):
 
         return lrs
 
-    def train_epoch(self, epoch: int, top_k: int, args, **kwargs):
-        batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
+    def train_epoch(self,
+                    epoch: int,
+                    **kwargs):
         losses = AverageMeter('Loss_class', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
         topmulti = AverageMeter("accmulti", ':6.2f')
-        progress = ProgressMeter(
-            len(self.train_loader_),
-            [batch_time, data_time, losses, top1, topmulti],
-            prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
         train_len = len(self.train_loader_)
         start_iter = epoch * train_len
-        end = time.time()
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
 
         pbar = tqdm(enumerate(self.train_loader_),
@@ -102,11 +141,9 @@ class MultiLabelClassifyTrainer(BaseTrainer):
 
         for i, (images, target) in pbar:
 
-            data_time.update(time.time() - end)
-
             if torch.cuda.is_available():
-                images = images.cuda(args.gpus)
-                target = target.cuda(args.gpus, non_blocking=True)
+                images = images.cuda(self.args.gpus)
+                target = target.cuda(self.args.gpus, non_blocking=True)
 
             output = self.model_(images)
 
@@ -126,23 +163,26 @@ class MultiLabelClassifyTrainer(BaseTrainer):
             top1.update(acc1[0], images.size(0))
             topmulti.update(accmulti[0], images.size(0))
 
-            if i % args.print_freq == 0:
+            if i % self.args.print_freq == 0:
                 # 这里进行记录，是为了避免过多的数据跳动。
                 self.writer.add_scalar("train_loss", losses.avg, start_iter + i)
                 self.writer.add_scalar("train_acc1", top1.avg, start_iter + i)
 
-                _acc1 = round(float(acc1[0]), 4)
+                _top1 = round(float(acc1[0]), 4)
                 _topmulti = round(float(topmulti.avg), 4)
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss = round(float(losses.avg), 6)
 
-                logger.debug(f'[{epoch}/{self.args.epochs}] | '
-                             f'Loss : {_loss} | '
+                logger.debug(f'\n[Training] | '
+                             f'[{epoch}/{self.args.epochs}] | '
+                             f'{losses.name} : {_loss} | '
                              f'lr : {_lr} | '
-                             f'Acc@1 : {_acc1} | '
-                             f'topmulti : {_topmulti}')
+                             f'{top1.name} : {_top1} | '
+                             f'{topmulti.name} : {_topmulti}')
 
-    def validate(self, epoch: int, top_k: int, args, **kwargs):
+    def validate(self,
+                 epoch: int,
+                 **kwargs):
         """
         此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
         Args:
@@ -151,21 +191,15 @@ class MultiLabelClassifyTrainer(BaseTrainer):
         Returns:
         """
 
-        batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
         top1 = AverageMeter('Acc@1', ':6.2f')
         topmulti = AverageMeter("accmulti", ':6.2f')
-        progress = ProgressMeter(
-            len(self.val_loader_),
-            [batch_time, losses, top1, topmulti],
-            prefix='Test: ')
 
-        confusion_matrix_multilabel = np.zeros((2 * args.classes, 2 * args.classes), dtype=np.long)
+        confusion_matrix_multilabel = np.zeros((2 * self.args.classes, 2 * self.args.classes), dtype=np.long)
 
         self.model_.eval()
 
         with torch.no_grad():
-            end = time.time()
             for i, sample in enumerate(self.val_loader_):
                 if len(sample) == 2:
                     images, target = sample
@@ -173,8 +207,8 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                     images, target = sample[:2]
 
                 if torch.cuda.is_available():
-                    images = images.cuda(args.gpus)
-                    target = target.cuda(args.gpus, non_blocking=True)
+                    images = images.cuda(self.args.gpus)
+                    target = target.cuda(self.args.gpus, non_blocking=True)
 
                 output = self.model_(images)
                 if isinstance(output, list):
@@ -187,9 +221,6 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                 top1.update(acc1[0], images.size(0))
                 topmulti.update(accmulti[0], images.size(0))
 
-                batch_time.update(time.time() - end)
-                end = time.time()
-
                 output[output > 0.5] = 1
                 output[output <= 0.5] = 0
 
@@ -197,14 +228,21 @@ class MultiLabelClassifyTrainer(BaseTrainer):
                     for j, (t0, p0) in enumerate(zip(t, p)):
                         confusion_matrix_multilabel[2 * j + 1 - t0, 2 * j + 1 - p0] += 1
 
-                if i % args.print_freq == 0:
-                    progress.display(i)
+                if i % self.args.print_freq == 0:
+                    _top1 = round(float(top1.avg), 4)
+                    _topmulti = round(float(topmulti.avg), 4)
+                    _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
+                    _loss = round(float(losses.avg), 6)
 
-                    # TODO: 返回top几的准确度
-            print(' * Acc@1 {top1.avg:.3f} accmulti {topmulti.avg:.3f}'
-                  .format(top1=top1, topmulti=topmulti))
+                    logger.debug(f'\n[Val] | '
+                                 f'[{epoch}/{self.args.epochs}] | '
+                                 f'{losses.name} : {_loss} | '
+                                 f'lr : {_lr} | '
+                                 f'{top1.name} : {_top1} | '
+                                 f'{topmulti.name} : {_topmulti}')
 
-        print(confusion_matrix_multilabel)
+        logger.info(f'confusion_matrix_multilabel:{confusion_matrix_multilabel}')
+
         self.writer.add_scalar("val_acc1", top1.avg, epoch)
 
         return top1.avg
@@ -266,6 +304,6 @@ class MultiLabelClassifyTrainer(BaseTrainer):
     #     lr_scheduler = OneCycleLR(optimizer,
     #                               max_lr=self.lr,
     #                               steps_per_epoch=steps_per_epoch,
-    #                               epochs=self.epoches,
+    #                               epochs=self.epochs,
     #                               pct_start=0.2)
     #     return lr_scheduler

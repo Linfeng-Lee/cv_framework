@@ -54,7 +54,7 @@ class Model:
 
         display_config(self.args)
 
-        logger.success('Updata args done.\n')
+        logger.success('Update args done.\n')
 
     def _init_transforms(self):
         logger.info('🚀Init transforms...')
@@ -81,79 +81,93 @@ class Model:
         self.args.train_data_path = self.train_data_path
         self.args.val_data_path = self.val_data_path
 
-        tensorboard_save_path = os.path.join(self.ROOT, self.args.project, "runs")
+        self.tensorboard_save_path = os.path.join(self.ROOT, self.args.project, "runs")
 
         if self.args.task_type == "classification":
             from trainer.base_trainer import BaseTrainer
             self.trainer = BaseTrainer()
-            self.trainer.init_trainer(self.args.net,
-                                      self.args.lr,
-                                      self.train_data_path,
-                                      self.val_data_path,
-                                      self.train_transform,
-                                      self.val_transform,
-                                      self.args.gpus,
-                                      self.args.classes,
-                                      self.args.batch_size,
-                                      self.args.worker,
-                                      criterion_list=self.args.criterion_list,
-                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
-                                      pretrained=False,
-                                      args=self.args)
+            self.trainer.init_trainer_v2(self.args,
+                                         self.train_transform,
+                                         self.val_transform,
+                                         self.tensorboard_save_path)
+            # self.trainer.init_trainer(self.args.net,
+            #                           self.args.lr,
+            #                           self.train_data_path,
+            #                           self.val_data_path,
+            #                           self.train_transform,
+            #                           self.val_transform,
+            #                           self.args.gpus,
+            #                           self.args.classes,
+            #                           self.args.batch_size,
+            #                           self.args.worker,
+            #                           criterion_list=self.args.criterion_list,
+            #                           tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
+            #                           pretrained=False,
+            #                           args=self.args)
 
         elif self.args.task_type == "segmentation":
             from trainer.segmentation_trainer import SegmantationTrainer
             self.trainer = SegmantationTrainer()
-            self.trainer.init_trainer(self.args.net,
-                                      self.args.lr,
-                                      self.train_data_path,
-                                      self.val_data_path,
-                                      self.args.gpus,
-                                      self.args.classes,
-                                      classify_transform=self.train_transform,
-                                      criterion_list=self.args.criterion_list,
-                                      tensorboard_save_path=os.path.join('project', self.args.project, 'runs'),
-                                      tensor_transform=self.tensor_transforms,
-                                      mask_transform=self.keypoint_transforms,
-                                      balance_n_classes=self.args.balance_n_classes,
-                                      balance_n_samples=self.args.balance_n_samples,
-                                      class_id_map_save_path=self.args.class_id_map_save_path,
-                                      remove_no_json_sample_flag=False,
-                                      convert_float_flag=self.args.convert_float_flag,
-                                      return_path=True,
-                                      period_thresh=self.args.period_thresh,
-                                      period_n_min=self.args.period_n_min,
-                                      period_weights=self.period_weights,
-                                      asymmetry_id=False,
-                                      weight=self.args.class_weight,
-                                      args=self.args)
+            self.trainer.init_trainer_v2(self.args,
+                                         self.tensor_transforms,
+                                         self.keypoint_transforms,
+                                         self.tensorboard_save_path)
+            # self.trainer.init_trainer(self.args.net,
+            #                           self.args.lr,
+            #                           self.train_data_path,
+            #                           self.val_data_path,
+            #                           self.args.gpus,
+            #                           self.args.classes,
+            #                           classify_transform=self.train_transform,
+            #                           criterion_list=self.args.criterion_list,
+            #                           tensorboard_save_path=os.path.join('project', self.args.project, 'runs'),
+            #                           tensor_transform=self.tensor_transforms,
+            #                           mask_transform=self.keypoint_transforms,
+            #                           balance_n_classes=self.args.balance_n_classes,
+            #                           balance_n_samples=self.args.balance_n_samples,
+            #                           class_id_map_save_path=self.args.class_id_map_save_path,
+            #                           remove_no_json_sample_flag=False,
+            #                           convert_float_flag=self.args.convert_float_flag,
+            #                           return_path=True,
+            #                           period_thresh=self.args.period_thresh,
+            #                           period_n_min=self.args.period_n_min,
+            #                           period_weights=self.period_weights,
+            #                           asymmetry_id=False,
+            #                           weight=self.args.class_weight,
+            #                           args=self.args)
 
         elif self.args.task_type == "multilabel-classification":
             from trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
             self.trainer = MultiLabelClassifyTrainer()
-            self.trainer.init_trainer(self.args.net,
-                                      self.args.lr,
-                                      self.train_data_path,
-                                      self.val_data_path,
-                                      self.args.gpus,
-                                      self.args.classes,
-                                      classify_transform=self.train_transform,
-                                      criterion_list=self.args.criterion_list,
-                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
-                                      tensor_transform=self.tensor_transforms,
-                                      balance_n_classes=self.args.balance_n_classes,
-                                      balance_n_samples=self.args.balance_n_samples,
-                                      class_id_map_save_path=self.args.class_id_map_save_path,
-                                      remove_no_json_sample_flag=False,
-                                      convert_float_flag=self.args.convert_float_flag,
-                                      return_path=True,
-                                      period_n_min=self.args.period_n_min,
-                                      weights=None,
-                                      pos_weights=None,
-                                      asymmetry_id=False,
-                                      mask_classes=self.args.classes,
-                                      epoches=self.args.epochs,
-                                      args=self.args)
+
+            # TODO
+            self.trainer.init_trainer_v2(self.args,
+                                         self.train_transform,
+                                         self.tensor_transforms,
+                                         self.tensorboard_save_path)
+            # self.trainer.init_trainer(self.args.net,
+            #                           self.args.lr,
+            #                           self.train_data_path,
+            #                           self.val_data_path,
+            #                           self.args.gpus,
+            #                           self.args.classes,
+            #                           classify_transform=self.train_transform,
+            #                           criterion_list=self.args.criterion_list,
+            #                           tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
+            #                           tensor_transform=self.tensor_transforms,
+            #                           balance_n_classes=self.args.balance_n_classes,
+            #                           balance_n_samples=self.args.balance_n_samples,
+            #                           class_id_map_save_path=self.args.class_id_map_save_path,
+            #                           remove_no_json_sample_flag=False,
+            #                           convert_float_flag=self.args.convert_float_flag,
+            #                           return_path=True,
+            #                           period_n_min=self.args.period_n_min,
+            #                           weights=None,
+            #                           pos_weights=None,
+            #                           asymmetry_id=False,
+            #                           mask_classes=self.args.classes,
+            #                           epoches=self.args.epochs,
+            #                           args=self.args)
 
         elif self.args.task_type == "embedding-classification":
             from trainer.embedding_trainer import EmbeddingTrainer
@@ -162,7 +176,7 @@ class Model:
             self.trainer.init_trainer_v2(self.args,
                                          self.train_transform,
                                          self.val_transform,
-                                         tensorboard_save_path)
+                                         self.tensorboard_save_path)
 
             # self.trainer.init_trainer(self.args.net,
             #                           self.args.lr,

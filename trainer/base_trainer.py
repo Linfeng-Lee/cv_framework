@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from PIL import Image, ImageFile
+from typing import Callable
+from utils.evaluation import top1, top5, topk
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -37,6 +39,36 @@ class BaseTrainer(abc.ABC):
 
     def normalize_transpose(self, input):
         pass
+
+    def init_trainer_v2(self,
+                        args,
+                        train_transforms: Callable,
+                        val_transforms: Callable,
+                        tensorboard_save_path: str = 'temp/tensorboard',
+                        **kwargs):
+        # self.args = kwargs["args"]
+        self.args = args
+        self.model_ = self.create_model(self.args.net,
+                                        self.args.pretrained,
+                                        num_classes=self.args.classes).cuda(self.args.gpus)
+        self.optimizer_ = self.define_optimizer(self.args.lr)
+        self.train_loader_ = self.define_loader(self.args.train_data_path,
+                                                train_transforms,
+                                                batch_size=self.args.batch_size,
+                                                num_workers=self.args.workers,
+                                                shuffle=True)
+        self.val_loader_ = self.define_loader(self.args.val_data_path,
+                                              val_transforms,
+                                              batch_size=self.args.batch_size,
+                                              num_workers=self.args.workers,
+                                              shuffle=True)
+        self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
+        self.criterion = self.define_criterion(self.args.criterion_list, self.args.gpus)
+        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
+
+        if isinstance(self.args.topk, (int, list, tuple)) is False:
+            logger.error(f'args.topk type error,only support:(int,list, tuple) -> exit.')
+            exit()
 
     def init_trainer(self,
                      model_names: str,
@@ -103,7 +135,7 @@ class BaseTrainer(abc.ABC):
         optimizer = torch.optim.AdamW(self.model_.parameters(), lr=lr)
         return optimizer
 
-    def define_loader(self, path: str, trans, **kwargs):
+    def define_loader(self, path: str, trans: Callable, **kwargs):
         dataset_img = datasets.ImageFolder(path, transform=trans)
         data_loader = torch.utils.data.DataLoader(dataset_img, **kwargs)
         return data_loader
@@ -119,18 +151,22 @@ class BaseTrainer(abc.ABC):
     #     return lr_scheduler
 
     def define_lr_scheduler(self, optimizer):
-        lrs = OneCycleLR(optimizer, max_lr=self.args.lr, steps_per_epoch=len(self.train_loader_),
+        lrs = OneCycleLR(optimizer,
+                         max_lr=self.args.lr,
+                         steps_per_epoch=len(self.train_loader_),
                          epochs=self.args.epochs,
                          pct_start=0.2)
 
         return lrs
 
-    def fit(self, start_epoch: int, epochs: int, top_k: int, args, save_path: str, **kwargs):
+    def fit(self,
+            save_path: str,
+            **kwargs):
         best_acc = 0.5
-        for epoch in range(start_epoch, epochs):
+        for epoch in range(self.args.start_epoch, self.args.epochs):
             # self.lr_scheduler_.step()
-            self.train_epoch(epoch, top_k, args, **kwargs)
-            top1_acc = self.validate(epoch, top_k, args)
+            self.train_epoch(epoch, **kwargs)
+            top1_acc = self.validate(epoch)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
             self.save_checkpoint(
@@ -141,59 +177,69 @@ class BaseTrainer(abc.ABC):
                 }, is_best, save_path
             )
 
-    def train_epoch(self, epoch: int, top_k: int, args, normalize_transpose=None):
-        topn_str = "Acc@{}".format(top_k)
-        batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
+    def train_epoch(self,
+                    epoch: int,
+                    normalize_transpose=None):
         losses = AverageMeter('Loss', ':.4e')
-        top1 = AverageMeter('Acc@1', ':6.2f')
-        topn = AverageMeter(topn_str, ':6.2f')
-        progress = ProgressMeter(
-            len(self.train_loader_),
-            [batch_time, data_time, losses, top1, topn],
-            prefix="Epoch: [{}]".format(epoch))
+        if isinstance(self.args.topk, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in self.args.topk]
+        else:
+            topn = [AverageMeter(f'Acc@{self.args.topk}')]
 
         self.model_.train()
         train_len = len(self.train_loader_)
         start_iter = epoch * train_len
-        end = time.time()
         self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
 
-        pbar = tqdm(enumerate(self.train_loader_), total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        pbar = tqdm(enumerate(self.train_loader_),
+                    total=train_len,
+                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
         for i, (images, target) in pbar:
-            data_time.update(time.time() - end)
             if torch.cuda.is_available():
-                images = images.cuda(args.gpus)
-                target = target.cuda(args.gpus, non_blocking=True)
+                images = images.cuda(self.args.gpus)
+                target = target.cuda(self.args.gpus, non_blocking=True)
 
             output = self.model_(images)
             loss = self.criterion[0](output, target)
 
-            acc1, acc5 = accuracy(output, target, topk=(1, top_k))
+            acc = topk(output, target, k=self.args.topk)
+
+            # acc1, acc5 = accuracy(output, target, topk=self.args.topk)
             losses.update(loss.item(), images.size(0))
-            top1.update(acc1[0], images.size(0))
-            topn.update(acc5[0], images.size(0))
+
+            for j in range(len(self.args.topk)):
+                topn[j].update(acc[j], images.size(0))
+
+            # top1.update(acc1[0], images.size(0))
+            # topn.update(acc5[0], images.size(0))
 
             self.optimizer_.zero_grad()
             loss.backward()
             self.optimizer_.step()
             self.lr_scheduler_.step()
 
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if i % args.print_freq == 0:
+            if i % self.args.print_freq == 0:
                 # 这里进行记录，是为了避免过多的数据跳动。
                 origin_input = normalize_transpose(images)
                 origin_input = np.array(origin_input.cpu().detach().numpy(), dtype=np.uint8)
                 self.writer.add_images('input_img', origin_input, (start_iter + i))
                 self.writer.add_scalar("train_loss", losses.avg, (start_iter + i))
-                self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
+                # self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
+                for k in range(len(self.args.topk)):
+                    self.writer.add_scalar(f"train_acc{k}", topn[k].avg, (start_iter + i))
 
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss = round(float(losses.avg), 6)
-                _acc1 = round(float(top1.avg), 4)
-                logger.debug(f'[{epoch}/{self.args.epochs}] | Loss:{_loss} | lr:{_lr} | Acc@1:{_acc1}')
+                # _acc1 = round(float(top1.avg), 4)
+                topn_str = ''
+                for k in topn:
+                    topn_str += f' | {k.name}:{round(float(k.avg), 4)}'
+
+                logger.debug(f'[Training] | '
+                             f'[{epoch}/{self.args.epochs}] | '
+                             f'Loss:{_loss} | '
+                             f'lr:{_lr} | ' +
+                             topn_str)
 
     def test_mask(self,
                   show_channel: int,
@@ -277,7 +323,8 @@ class BaseTrainer(abc.ABC):
                         target_id = str(int(target[idx].cpu().detach().numpy()))
                         target_name = get_key(self.val_loader_.dataset.class_to_idx, int(int(target_id)))
                         img_mask_info_fs.writelines("{} {} {} {}\n".format(path[idx], target_id, target_name[0],
-                                                                           mask_val_sum[idx].cpu().detach().numpy()))
+                                                                           mask_val_sum[
+                                                                               idx].cpu().detach().numpy()))
                     mask_error_flag = mask_val_sum > area_threshold
                     for idx, mask_error_flag_item in enumerate(mask_error_flag):
                         # 这里进行存储每一个类别的路径。
@@ -455,7 +502,7 @@ class BaseTrainer(abc.ABC):
 
             print("平均耗时：{}".format(np.array(cost_time).sum() / len(cost_time)))
 
-    def validate(self, epoch: int, top_k: int, args, **kwargs):
+    def validate(self, epoch: int, **kwargs):
         """
         此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
         Args:
@@ -463,21 +510,17 @@ class BaseTrainer(abc.ABC):
             args: 进行预测的参数配置
         Returns:
         """
-
-        topn_str = "Acc@{}".format(top_k)
-        batch_time = AverageMeter('Time', ':6.3f')
         losses = AverageMeter('Loss', ':.4e')
-        top1 = AverageMeter('Acc@1', ':6.2f')
-        topn = AverageMeter(topn_str, ':6.2f')
-        progress = ProgressMeter(
-            len(self.val_loader_),
-            [batch_time, losses, top1, topn],
-            prefix='Test: ')
+
+        if isinstance(self.args.topk, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in self.args.topk]
+        else:
+            topn = [AverageMeter(f'Acc@{self.args.topk}')]
 
         self.model_.eval()
 
         with torch.no_grad():
-            end = time.time()
+            # end = time.time()
             for i, sample in enumerate(self.val_loader_):
                 if len(sample) == 2:
                     images, target = sample
@@ -485,37 +528,32 @@ class BaseTrainer(abc.ABC):
                     images, target = sample[:2]
 
                 if torch.cuda.is_available():
-                    images = images.cuda(args.gpus)
-                    target = target.cuda(args.gpus, non_blocking=True)
+                    images = images.cuda(self.args.gpus)
+                    target = target.cuda(self.args.gpus, non_blocking=True)
 
                 output = self.model_(images)
                 if isinstance(output, list):
                     output = output[0]
 
                 loss = self.criterion[0](output, target)
-
-                acc1, acc5 = accuracy(output, target, topk=(1, top_k))
                 losses.update(loss.item(), images.size(0))
-                top1.update(acc1[0], images.size(0))
-                topn.update(acc5[0], images.size(0))
 
-                batch_time.update(time.time() - end)
-                end = time.time()
+                acc = topk(output, target, k=self.args.topk)
+                for j in range(len(self.args.topk)):
+                    topn[j].update(acc[j], images.size(0))
 
-                if i % args.print_freq == 0:
-                    progress.display(i)
-                # if (not args.control.projectOperater.automate) and \
-                #         (not args.control.projectOperater.testing) and (not args.control.projectOperater.training):
-                #     break
-                # TODO: 返回top几的准确度
-            print(' * Acc@1 {top1.avg:.3f} {top_str} {top.avg:.3f}'
-                  .format(top1=top1, top_str=topn_str, top=topn))
+                topn_str = ''
+                for n in topn:
+                    topn_str += f' | {n.name}:{round(float(n.avg), 4)}'
 
-        self.writer.add_scalar("val_acc1", top1.avg, epoch)
+                if i % self.args.print_freq == 0:
+                    logger.debug(f'[Val] | '
+                                 f'{losses.name}: {round(float(losses.avg), 4)}' +
+                                 topn_str)
 
-        # args.control.projectOperater.testAcu = top1.avg
+        self.writer.add_scalar("val_acc1", topn[0].avg, epoch)
 
-        return top1.avg
+        return topn[0].avg
 
     def judge_cycle_mask_train(self, output, mask, area_threshold=100, judge_channel: int = 0, target_id: int = 0):
         """

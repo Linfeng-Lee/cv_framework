@@ -33,6 +33,7 @@ __C.train_transforms                    = None
 __C.val_transforms                      = None
 __C.train_data_path                     = ''
 __C.val_data_path                       = ''
+
 # ext args
 __C.class_weight                        = []
 __C.period_weights                      = 0.0  # auto update
@@ -50,6 +51,7 @@ __C.period_n_min                        = 10000
 __C.asymmetry_id                        = False
 __C.data_count                          = 0
 __C.emb_template_path                   = ''
+__C.judge_cycle_train                   = False
 # Display & Save
 
 

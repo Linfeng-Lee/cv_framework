@@ -13,7 +13,7 @@ balance_n_classes             : 8
 balance_n_samples             : 8
 resume                        : project/hrsf_Al_2/weights/checkpoint.pth.tar
 device                        : gpu
-worker                        : 8
+workers                       : 8
 seed                          : 0
 lr                            : 0.01
 criterion_list                : [ AsymmetricLoss ]

@@ -13,7 +13,7 @@ balance_n_classes           : 2
 balance_n_samples           : 64
 resume                      : project/deyuan_short_yellow/weights/checkpoint.pth.tar
 device                      : gpu
-worker                      : 8
+workers                     : 8
 seed                        : 0
 lr                          : 0.001
 criterion_list              : [CrossEntropyLoss]

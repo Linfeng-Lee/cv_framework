@@ -2,7 +2,7 @@ import os
 import json
 import time
 from matplotlib import lines
-
+from typing import Callable
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -21,11 +21,46 @@ from torch.optim.lr_scheduler import OneCycleLR
 from typing import Union
 from utils.evaluation import top1, top5, topk
 
+from typing import Callable
+
 
 class SegmantationTrainer(BaseTrainer):
     def __init__(self):
         super(SegmantationTrainer, self).__init__()
         self.train_loader_remove_no_json_ = None
+
+    def init_trainer_v2(self,
+                        args,
+                        tensor_transform: Callable,
+                        mask_transform: Callable,
+                        tensorboard_save_path: str = 'temp/tensorboard',
+                        **kwargs
+                        ):
+        # self.args = kwargs["args"]
+        self.args = args
+        self.model_ = self.create_model(self.args.net,
+                                        self.args.pretrained,
+                                        num_classes=self.args.classes).cuda(self.args.gpus)
+        self.optimizer_ = self.define_optimizer(self.args.lr)
+        self.train_loader_remove_no_json_ = self.define_loader(self.args.train_data_path,
+                                                               tensor_transform=tensor_transform,
+                                                               mask_transform=mask_transform,
+                                                               balance_n_classes=self.args.balance_n_classes,
+                                                               balance_n_samples=self.args.balance_n_samples,
+                                                               class_id_map_save_path=self.args.class_id_map_save_path,
+                                                               **kwargs
+                                                               )
+        self.val_loader_ = self.define_loader(self.args.val_data_path,
+                                              tensor_transform=tensor_transform,
+                                              mask_transform=mask_transform,
+                                              balance_n_classes=self.args.balance_n_classes,
+                                              balance_n_samples=self.args.balance_n_samples,
+                                              class_id_map_save_path=self.args.class_id_map_save_path,
+                                              **kwargs)
+        self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
+        self.criterion = self.define_criterion(self.args.criterion_list, self.args.gpus, **kwargs)
+        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
+        self.evaluator = SegmentationEvaluator(self.args.classes)
 
     def init_trainer(self,
                      model_names: str,
@@ -42,7 +77,9 @@ class SegmantationTrainer(BaseTrainer):
         self.args = kwargs["args"]
         self.model_ = self.create_model(model_names, pretrained, num_classes=classes).cuda(gpus)
         self.optimizer_ = self.define_optimizer(lr)
-        self.train_loader_remove_no_json_ = self.define_loader(train_data_path, **kwargs)
+        self.train_loader_remove_no_json_ = self.define_loader(train_data_path,
+
+                                                               **kwargs)
         self.val_loader_ = self.define_loader(val_data_path, **kwargs)
         self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
         self.criterion = self.define_criterion(criterion_list, gpus, **kwargs)
@@ -63,22 +100,16 @@ class SegmantationTrainer(BaseTrainer):
         return data_loader
 
     @torch.no_grad()
-    def validate(self, epoch, top_k, args, **kwargs):
-        # return 1.0
-        # batch_time = AverageMeter('Time', ':6.3f')
-        # data_time = AverageMeter('Data', ':6.3f')
-        # 
-        # progress = ProgressMeter(
-        #     len(self.val_loader_),
-        #     [batch_time, data_time],
-        #     prefix="Epoch: [{}]".format(epoch))
-
-        self.model_.eval()
-        start_iter = epoch * len(self.val_loader_)
-        end = time.time()
+    def validate(self, epoch, **kwargs):
         i = 0
+        self.model_.eval()
         self.evaluator.reset()
-        for no_json_list in self.val_loader_:  # img_tensor,class_id,mask_trg,img_path
+
+        val_loader_len = len(self.val_loader_)
+        pbar = tqdm(self.val_loader_,
+                    total=val_loader_len,
+                    bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+        for no_json_list in pbar:  # img_tensor,class_id,mask_trg,img_path
             # 为了兼容后期返回的各种数量长度
             # data_time.update(time.time() - end)
 
@@ -89,8 +120,8 @@ class SegmantationTrainer(BaseTrainer):
 
             # 进行加mask分支训练
             if torch.cuda.is_available():
-                images_remove_no_json = images_remove_no_json.cuda(args.gpus)
-                mask_target_remove_no_json = mask_target_remove_no_json.cuda(args.gpus)
+                images_remove_no_json = images_remove_no_json.cuda(self.args.gpus)
+                mask_target_remove_no_json = mask_target_remove_no_json.cuda(self.args.gpus)
 
             mask_output = self.model_(images_remove_no_json)
 
@@ -112,8 +143,7 @@ class SegmantationTrainer(BaseTrainer):
             # batch_time.update(time.time() - end)
             # end = time.time()
 
-            if i % args.print_freq == 0:
-                # progress.display(i)
+            if i % self.args.print_freq == 0:
                 logger.debug(f'[Val] | mIoU:{batch_miou}')
 
             i += 1
@@ -123,17 +153,13 @@ class SegmantationTrainer(BaseTrainer):
         return 1.0
 
     def fit(self,
-            start_epoch: int,
-            epochs: int,
-            top_k: Union[int, list, tuple],
-            args,
             save_path: str,
             **kwargs):
         best_acc = 0.5
-        for epoch in range(start_epoch, epochs):
+        for epoch in range(self.args.start_epoch, self.args.epochs):
             # self.lr_scheduler_.step()
-            self.train_epoch(epoch, top_k, args, **kwargs)
-            top1_acc = self.validate(epoch, top_k, args)
+            self.train_epoch(epoch, **kwargs)
+            top1_acc = self.validate(epoch)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
             self.save_checkpoint(
@@ -146,16 +172,8 @@ class SegmantationTrainer(BaseTrainer):
 
     def train_epoch(self,
                     epoch: int,
-                    top_k: Union[int, list, tuple],
-                    args,
                     **kwargs):
-        batch_time = AverageMeter('Time', ':6.3f')
-        # data_time = AverageMeter('Data', ':6.3f')
         loss_mask_output_avg = AverageMeter('loss_mask', ':.4e')
-        # progress = ProgressMeter(
-        #     len(self.train_loader_remove_no_json_),
-        #     [batch_time, data_time, loss_mask_output_avg],
-        #     prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
         train_len = len(self.train_loader_remove_no_json_)
@@ -179,10 +197,10 @@ class SegmantationTrainer(BaseTrainer):
 
             # 进行加mask分支训练
             if torch.cuda.is_available():
-                images_remove_no_json = images_remove_no_json.cuda(args.gpus)
-                mask_target_remove_no_json = mask_target_remove_no_json.cuda(args.gpus)
+                images_remove_no_json = images_remove_no_json.cuda(self.args.gpus)
+                mask_target_remove_no_json = mask_target_remove_no_json.cuda(self.args.gpus)
 
-            for cur_time in range(args.cycle_train_times):
+            for cur_time in range(self.args.cycle_train_times):
                 mask_output = self.model_(images_remove_no_json)
                 loss_mask = self.criterion[0](mask_output, mask_target_remove_no_json)
                 loss = loss_mask
@@ -195,7 +213,7 @@ class SegmantationTrainer(BaseTrainer):
                 self.optimizer_.step()
                 self.lr_scheduler_.step()
                 # 进行困难样本的重新训练
-                if not self.judge_cycle_mask_train(mask_output, target_remove_no_json, args.area_threshold):
+                if not self.judge_cycle_mask_train(mask_output, target_remove_no_json, self.args.area_threshold):
                     break
 
             # calculate batch mIOU        
@@ -218,18 +236,18 @@ class SegmantationTrainer(BaseTrainer):
             # batch_time.update(time.time() - end)
             # end = time.time()
 
-            if i % args.print_freq == 0:
+            if i % self.args.print_freq == 0:
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss_mask = round(float(loss_mask_output_avg.avg), 6)
 
-                logger.debug(f'[Training] | '
+                logger.debug(f'\n[Training] | '
                              f'[{epoch}/{self.args.epochs}] | '
                              f'Loss mask:{_loss_mask} | lr:{_lr} | '
                              f'mIoU:{batch_miou}')
 
                 self.writer.add_scalar("train_mask_loss", loss_mask_output_avg.avg, start_iter + i)
 
-            if (i + 1) % args.save_freq == 0:
+            if (i + 1) % self.args.save_freq == 0:
                 self.save_checkpoint(
                     {
                         "epoch": epoch + 1,
