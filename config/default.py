@@ -1,11 +1,12 @@
 from yacs.config import CfgNode as CN
-
+import torch
 __C = CN()
 __C.project                             = 'demo'
 __C.net                                 = ''
 __C.task_type                           = ''
 
 # Training config
+# common args
 __C.data_root                           = '/home/lee/data/shuangjing/data'
 __C.input_w                             = 320
 __C.input_h                             = 192
@@ -17,13 +18,22 @@ __C.epochs = 50
 __C.balance_n_classes                   = 8
 __C.balance_n_samples                   = 16
 __C.resume                              = ''
+__C.pretrained                          = True
 __C.device                              = 'gpu'
-__C.worker                              = 8
+__C.workers                             = 8
 __C.seed                                = 0
 __C.lr                                  = 0.001
-__C.criterion_list                      = ['CrossEntropyLoss']
 __C.threshold                           = 0.5
 __C.gpus                                = 0
+__C.topk                                = [1,2]
+__C.print_freq                          = 10  # step
+__C.save_freq                           = 500  # step
+__C.criterion_list                      = ['CrossEntropyLoss']
+__C.train_transforms                    = None
+__C.val_transforms                      = None
+__C.train_data_path                     = ''
+__C.val_data_path                       = ''
+# ext args
 __C.class_weight                        = []
 __C.period_weights                      = 0.0  # auto update
 __C.period_thresh                       = 0.0  # auto update
@@ -38,13 +48,9 @@ __C.convert_float_flag                  = False
 __C.class_id_map_save_path              = 'temp/class_id_map.txt'
 __C.period_n_min                        = 10000
 __C.asymmetry_id                        = False
-__C.class_weight                        = []
 __C.data_count                          = 0
 __C.emb_template_path                   = ''
-__C.topk                                = [1,2]
 # Display & Save
-__C.print_freq                          = 10  # step
-__C.save_freq                           = 500  # step
 
 
 # Data Augmentation Params

@@ -44,9 +44,55 @@ class EmbeddingTrainer(abc.ABC):
         self.lr_scheduler_ = None
         self.criterion = None
         self.writer = None
+        # self.topk = 1
 
+    #
     def normalize_transpose(self, input):
         pass
+
+    def init_trainer_v2(self,
+                        args,
+                        train_transforms: Callable,
+                        val_transforms: Callable,
+                        tensorboard_save_path):
+        self.args = args
+
+        self.model_ = self.create_model(self.args.net,
+                                        self.args.pretrained,
+                                        embedding_classes=self.args.classes).cuda(self.args.gpus)
+        self.optimizer_ = self.define_optimizer(self.args.lr)
+
+        self.train_loader_ = self.define_loader(self.args.train_data_path,
+                                                train_transforms,
+                                                batch_size=self.args.batch_size,
+                                                num_workers=self.args.workers,
+                                                shuffle=True)
+        self.val_loader_ = self.define_loader(self.args.val_data_path,
+                                              val_transforms,
+                                              batch_size=self.args.batch_size,
+                                              num_workers=self.args.workers,
+                                              shuffle=True)
+        test_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((self.args.input_h, self.args.input_w)),
+            transforms.Normalize(mean=self.args.augment.mean, std=self.args.augment.std)
+        ])
+        self.test_loader_ = self.define_loader(self.args.val_data_path,
+                                               test_transforms,
+                                               batch_size=self.args.test_batch_size,
+                                               num_workers=self.args.workers)
+        self.criterion = self.define_criterion(self.args.criterion_list, self.args.gpus)
+        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
+
+        self.center_loss = CenterLoss(num_classes=self.args.classes, feat_dim=1024)
+        self.center_loss_weight = 0.5
+        self.optimizer_.add_param_group({'params': self.center_loss.parameters(),
+                                         'lr': self.args.lr})
+        self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
+        print(type(self.args.topk))
+        if isinstance(self.args.topk, (int, list, tuple)) is False:
+            logger.error(f'args.topk type error,only support:(int,list, tuple) -> exit.')
+            exit()
 
     def init_trainer(self,
                      model_names: str,
@@ -157,17 +203,17 @@ class EmbeddingTrainer(abc.ABC):
         return lrs
 
     def fit(self,
-            start_epoch: int,
-            epochs: int,
-            top_k: Union[int, list, tuple],
+            # start_epoch: int,
+            # epochs: int,
+            # top_k: Union[int, list, tuple],
             save_path: str,
-            args,
             **kwargs):
+
         best_acc = 0.5
-        for epoch in range(start_epoch, epochs):
+        for epoch in range(self.args.start_epoch, self.args.epochs):
             # self.lr_scheduler_.step()
-            self.train_epoch(epoch, top_k, args, **kwargs)
-            top1_acc = self.validate(epoch, top_k, args)
+            self.train_epoch(epoch, **kwargs)
+            top1_acc = self.validate(epoch, self.args.topk)
             is_best = top1_acc >= best_acc
             best_acc = max(top1_acc, best_acc)
             self.save_checkpoint(
@@ -184,15 +230,14 @@ class EmbeddingTrainer(abc.ABC):
                          f'Acc@1:{top1_acc} | '
                          f'Best Acc@1:{best_acc}')
 
-    def train_epoch(self, epoch: int,
-                    top_k: Union[int, list, tuple],
-                    args,
+    def train_epoch(self,
+                    epoch: int,
                     normalize_transpose: Callable = None):
 
-        if isinstance(top_k, (list, tuple)):
-            topn = [AverageMeter(f'Acc@{k}') for k in top_k]
+        if isinstance(self.args.topk, (list, tuple)):
+            topn = [AverageMeter(f'Acc@{k}') for k in self.args.topk]
         else:
-            topn = [AverageMeter(f'Acc@{top_k}')]
+            topn = [AverageMeter(f'Acc@{self.args.topk}')]
 
         losses = AverageMeter(f'loss')
 
@@ -205,8 +250,8 @@ class EmbeddingTrainer(abc.ABC):
         pbar = tqdm(enumerate(self.train_loader_), total=train_len, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
         for i, (images, target) in pbar:
             if torch.cuda.is_available():
-                images = images.cuda(args.gpus)
-                target = target.cuda(args.gpus, non_blocking=True)
+                images = images.cuda(self.args.gpus)
+                target = target.cuda(self.args.gpus, non_blocking=True)
 
             output, output_emb = self.model_(images)
 
@@ -230,20 +275,20 @@ class EmbeddingTrainer(abc.ABC):
             self.lr_scheduler_.step()
 
             # compute topk
-            acc = topk(output, binary_target, k=top_k)
+            acc = topk(output, binary_target, k=self.args.topk)
 
             losses.update(loss.item(), images.size(0))
 
-            for j in range(len(top_k)):
+            for j in range(len(self.args.topk)):
                 topn[j].update(acc[j], images.size(0))
 
-            if i % args.print_freq == 0:
+            if i % self.args.print_freq == 0:
                 origin_input = normalize_transpose(images)
                 origin_input = np.array(origin_input.cpu().detach().numpy(), dtype=np.uint8)
                 self.writer.add_images('input_img', origin_input, (start_iter + i))
                 self.writer.add_scalar("train_loss", losses.avg, (start_iter + i))
                 # self.writer.add_scalar("train_acc1", top1.avg, (start_iter + i))
-                for k in range(len(top_k)):
+                for k in range(len(self.args.topk)):
                     self.writer.add_scalar(f"train_acc{k}", topn[k].avg, (start_iter + i))
 
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
@@ -260,7 +305,7 @@ class EmbeddingTrainer(abc.ABC):
                              f'lr:{_lr}' +
                              topn_str)
 
-    def validate(self, epoch: int, top_k: Union[int, list, tuple], args, **kwargs):
+    def validate(self, epoch: int, top_k: Union[int, list, tuple], **kwargs):
         """
         此函数只验证分类准确度、分类的损失。其也可以用于多任务的类别分支的准确度预测。
         Args:
@@ -283,15 +328,14 @@ class EmbeddingTrainer(abc.ABC):
                         total=len(self.val_loader_),
                         bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
             for i, sample in pbar:
-                # for i, sample in enumerate(self.val_loader_):
                 if len(sample) == 2:
                     images, target = sample
                 else:
                     images, target = sample[:2]
 
                 if torch.cuda.is_available():
-                    images = images.cuda(args.gpus)
-                    target = target.cuda(args.gpus, non_blocking=True)
+                    images = images.cuda(self.args.gpus)
+                    target = target.cuda(self.args.gpus, non_blocking=True)
 
                 output, output_emb = self.model_(images)
 
@@ -313,7 +357,7 @@ class EmbeddingTrainer(abc.ABC):
                     topn_str += f' | {n.name}:{round(float(n.avg), 4)}'
 
                 # display
-                if i % args.print_freq == 0:
+                if i % self.args.print_freq == 0:
                     logger.debug(f'[Val] | '
                                  f'{losses.name}: {round(float(losses.avg), 4)}' +
                                  topn_str)
@@ -640,8 +684,8 @@ class EmbeddingTrainer(abc.ABC):
 
         print("done")
 
-    def test(self, args):
-        top_k = args.topk
+    def test(self, **kwargs):
+        top_k = self.args.topk
         if isinstance(top_k, (list, tuple)):
             topn = [AverageMeter(f'Acc@{k}') for k in top_k]
         else:
@@ -659,8 +703,8 @@ class EmbeddingTrainer(abc.ABC):
                     images, target = sample[:2]
 
                 if torch.cuda.is_available():
-                    images = images.cuda(args.gpus)
-                    target = target.cuda(args.gpus, non_blocking=True)
+                    images = images.cuda(self.args.gpus)
+                    target = target.cuda(self.args.gpus, non_blocking=True)
 
                 # gs_score = output.softmax(dim=1)[0][0].detach().cpu().item()
                 # print(gs_score)
@@ -675,7 +719,6 @@ class EmbeddingTrainer(abc.ABC):
                 idx = torch.argmax(output, dim=0)
                 pred = output[idx].softmax(0).cpu().item()
                 binary_target_ = binary_target.cpu().item()
-                # print(f'target: {binary_target_} | pred_cls :{idx} pred: {pred} ')
 
                 acc = topk(outputs, binary_target, k=top_k)
 

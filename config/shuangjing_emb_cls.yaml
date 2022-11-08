@@ -16,7 +16,8 @@ balance_n_classes           : 8
 balance_n_samples           : 16
 resume                      : project/shuangjing/weights/checkpoint.pth.tar
 device                      : gpu
-worker                      : 8
+pretrained                  : True
+workers                     : 8
 seed                        : 0
 lr                          : 0.001
 criterion_list              : [ CrossEntropyLoss ]
@@ -27,7 +28,7 @@ period_weights              : 0.0 #auto update
 period_thresh               : 0.0 #auto update
 period_n_min                : 0 #auto update
 emb_template_path           : 'project/shuangjing/export/template_norm_2022-11-2.json'
-topk                        : [1]
+topk                        : [1,2]
 
 #Display & Save
 print_freq                  : 10 #sec

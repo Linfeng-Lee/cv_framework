@@ -78,6 +78,10 @@ class Model:
         self.val_data_path = os.path.join(str(self.args.data_root), "test")
         assert os.path.exists(self.train_data_path)
         assert os.path.exists(self.val_data_path)
+        self.args.train_data_path = self.train_data_path
+        self.args.val_data_path = self.val_data_path
+
+        tensorboard_save_path = os.path.join(self.ROOT, self.args.project, "runs")
 
         if self.args.task_type == "classification":
             from trainer.base_trainer import BaseTrainer
@@ -154,20 +158,26 @@ class Model:
         elif self.args.task_type == "embedding-classification":
             from trainer.embedding_trainer import EmbeddingTrainer
             self.trainer = EmbeddingTrainer()
-            self.trainer.init_trainer(self.args.net,
-                                      self.args.lr,
-                                      self.train_data_path,
-                                      self.val_data_path,
-                                      self.train_transform,
-                                      self.val_transform,
-                                      self.args.gpus,
-                                      self.args.classes,
-                                      self.args.batch_size,
-                                      self.args.worker,
-                                      tensorboard_save_path=os.path.join(self.ROOT, self.args.project, "runs"),
-                                      criterion_list=self.args.criterion_list,
-                                      pretrained=True,
-                                      args=self.args)
+
+            self.trainer.init_trainer_v2(self.args,
+                                         self.train_transform,
+                                         self.val_transform,
+                                         tensorboard_save_path)
+
+            # self.trainer.init_trainer(self.args.net,
+            #                           self.args.lr,
+            #                           self.train_data_path,
+            #                           self.val_data_path,
+            #                           self.train_transform,
+            #                           self.val_transform,
+            #                           self.args.gpus,
+            #                           self.args.classes,
+            #                           self.args.batch_size,
+            #                           self.args.worker,
+            #                           tensorboard_save_path=tensorboard_save_path,
+            #                           criterion_list=self.args.criterion_list,
+            #                           pretrained=True,
+            #                           args=self.args)
 
         elif self.args.task_type == "multitask":
             raise NotImplementedError
@@ -181,17 +191,17 @@ class Model:
         self.args.dataCount = 0
         self.args.loss = 0
         self.args.trainAuc = 0
-
+        save_path = os.path.join(self.ROOT, self.args.project, 'models')
         logger.info(f'🚀 {self.args.net} start train.')
 
         self.trainer.resume(self.args.resume, strict=True)
 
-        self.trainer.fit(start_epoch=self.args.start_epoch,
-                         epochs=self.args.epochs,
-                         top_k=self.args.topk,
-                         save_path=os.path.join(self.ROOT, self.args.project, 'models'),
-                         normalize_transpose=self.normalize_transpose,
-                         args=self.args)
+        self.trainer.fit(save_path=save_path,
+                         # start_epoch=self.args.start_epoch,  # ignore
+                         # epochs=self.args.epochs,  # ignore
+                         # top_k=self.args.topk,  # ignore
+                         # args=self.args,  # ignore
+                         normalize_transpose=self.normalize_transpose)
 
         logger.info(f'{self.args.net} end train.')
 

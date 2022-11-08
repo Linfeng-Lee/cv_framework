@@ -18,6 +18,8 @@ import shutil
 from PIL import Image
 import cv2
 from torch.optim.lr_scheduler import OneCycleLR
+from typing import Union
+from utils.evaluation import top1, top5, topk
 
 
 class SegmantationTrainer(BaseTrainer):
@@ -48,26 +50,28 @@ class SegmantationTrainer(BaseTrainer):
         self.evaluator = SegmentationEvaluator(classes)
 
     def define_lr_scheduler(self, optimizer):
-        lrs = OneCycleLR(optimizer, max_lr=self.args.lr, steps_per_epoch=len(self.train_loader_remove_no_json_),
+        lrs = OneCycleLR(optimizer,
+                         max_lr=self.args.lr,
+                         steps_per_epoch=len(self.train_loader_remove_no_json_),
                          epochs=self.args.epochs,
                          pct_start=0.2)
 
         return lrs
 
-    def define_loader(self, path, **kwargs):
+    def define_loader(self, path: str, **kwargs):
         data_loader = get_loader_mask(path, **kwargs)
         return data_loader
 
     @torch.no_grad()
     def validate(self, epoch, top_k, args, **kwargs):
         # return 1.0
-        batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
-
-        progress = ProgressMeter(
-            len(self.val_loader_),
-            [batch_time, data_time],
-            prefix="Epoch: [{}]".format(epoch))
+        # batch_time = AverageMeter('Time', ':6.3f')
+        # data_time = AverageMeter('Data', ':6.3f')
+        # 
+        # progress = ProgressMeter(
+        #     len(self.val_loader_),
+        #     [batch_time, data_time],
+        #     prefix="Epoch: [{}]".format(epoch))
 
         self.model_.eval()
         start_iter = epoch * len(self.val_loader_)
@@ -76,7 +80,7 @@ class SegmantationTrainer(BaseTrainer):
         self.evaluator.reset()
         for no_json_list in self.val_loader_:  # img_tensor,class_id,mask_trg,img_path
             # 为了兼容后期返回的各种数量长度
-            data_time.update(time.time() - end)
+            # data_time.update(time.time() - end)
 
             if isinstance(no_json_list, list):
                 images_remove_no_json, target_remove_no_json, mask_target_remove_no_json = no_json_list[:3]
@@ -105,11 +109,12 @@ class SegmantationTrainer(BaseTrainer):
             # print(_)
             # debug
 
-            batch_time.update(time.time() - end)
-            end = time.time()
+            # batch_time.update(time.time() - end)
+            # end = time.time()
 
             if i % args.print_freq == 0:
-                progress.display(i)
+                # progress.display(i)
+                logger.debug(f'[Val] | mIoU:{batch_miou}')
 
             i += 1
 
@@ -117,7 +122,13 @@ class SegmantationTrainer(BaseTrainer):
 
         return 1.0
 
-    def fit(self, start_epoch: int, epochs: int, top_k: int, args, save_path: str, **kwargs):
+    def fit(self,
+            start_epoch: int,
+            epochs: int,
+            top_k: Union[int, list, tuple],
+            args,
+            save_path: str,
+            **kwargs):
         best_acc = 0.5
         for epoch in range(start_epoch, epochs):
             # self.lr_scheduler_.step()
@@ -133,20 +144,25 @@ class SegmantationTrainer(BaseTrainer):
                 }, is_best, save_path
             )
 
-    def train_epoch(self, epoch: int, top_k: int, args, **kwargs):
+    def train_epoch(self,
+                    epoch: int,
+                    top_k: Union[int, list, tuple],
+                    args,
+                    **kwargs):
         batch_time = AverageMeter('Time', ':6.3f')
-        data_time = AverageMeter('Data', ':6.3f')
+        # data_time = AverageMeter('Data', ':6.3f')
         loss_mask_output_avg = AverageMeter('loss_mask', ':.4e')
-        progress = ProgressMeter(
-            len(self.train_loader_remove_no_json_),
-            [batch_time, data_time, loss_mask_output_avg],
-            prefix="Epoch: [{}]".format(epoch))
+        # progress = ProgressMeter(
+        #     len(self.train_loader_remove_no_json_),
+        #     [batch_time, data_time, loss_mask_output_avg],
+        #     prefix="Epoch: [{}]".format(epoch))
 
         self.model_.train()
         train_len = len(self.train_loader_remove_no_json_)
         start_iter = epoch * train_len
-        end = time.time()
-        self.writer.add_scalar("lr", self.optimizer_.param_groups[0]['lr'], epoch)
+        # end = time.time()
+        _lr = self.optimizer_.param_groups[0]['lr']
+        self.writer.add_scalar("lr", _lr, epoch)
         i = 0
         self.evaluator.reset()
         pbar = tqdm(self.train_loader_remove_no_json_,
@@ -154,7 +170,7 @@ class SegmantationTrainer(BaseTrainer):
                     bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
 
         for no_json_list in pbar:  # img_tensor,class_id,mask_trg,img_path
-            data_time.update(time.time() - end)
+            # data_time.update(time.time() - end)
             # 为了兼容后期返回的各种数量长度
             if isinstance(no_json_list, list):
                 images_remove_no_json, target_remove_no_json, mask_target_remove_no_json = no_json_list[:3]
@@ -165,6 +181,7 @@ class SegmantationTrainer(BaseTrainer):
             if torch.cuda.is_available():
                 images_remove_no_json = images_remove_no_json.cuda(args.gpus)
                 mask_target_remove_no_json = mask_target_remove_no_json.cuda(args.gpus)
+
             for cur_time in range(args.cycle_train_times):
                 mask_output = self.model_(images_remove_no_json)
                 loss_mask = self.criterion[0](mask_output, mask_target_remove_no_json)
@@ -198,14 +215,17 @@ class SegmantationTrainer(BaseTrainer):
             # debug
 
             loss_mask_output_avg.update(loss_mask.item(), images_remove_no_json.size(0))
-            batch_time.update(time.time() - end)
-            end = time.time()
+            # batch_time.update(time.time() - end)
+            # end = time.time()
 
             if i % args.print_freq == 0:
                 _lr = round(float(self.optimizer_.param_groups[0]['lr']), 6)
                 _loss_mask = round(float(loss_mask_output_avg.avg), 6)
 
-                logger.debug(f'[{epoch}/{self.args.epochs}] | Loss mask:{_loss_mask} | lr:{_lr} | mIoU:{batch_miou}')
+                logger.debug(f'[Training] | '
+                             f'[{epoch}/{self.args.epochs}] | '
+                             f'Loss mask:{_loss_mask} | lr:{_lr} | '
+                             f'mIoU:{batch_miou}')
 
                 self.writer.add_scalar("train_mask_loss", loss_mask_output_avg.avg, start_iter + i)
 
@@ -221,7 +241,7 @@ class SegmantationTrainer(BaseTrainer):
 
         self.evaluator.reset()
 
-    def _load_label_map(self, path):
+    def _load_label_map(self, path: str):
         with open(path, "r") as f:
             lines = f.readlines()
             idx = [int(l.strip().split("x")[0]) for l in lines]
@@ -230,7 +250,7 @@ class SegmantationTrainer(BaseTrainer):
 
         return label_map
 
-    def _labelme2mask(self, args, json_path, label_map):
+    def _labelme2mask(self, args, json_path: str, label_map):
         if not os.path.exists(json_path):
             return np.zeros((args.input_h, args.input_w), dtype="uint8")
 
@@ -326,56 +346,56 @@ class SegmantationTrainer(BaseTrainer):
 
         print("done")
 
-    def export_torchscript(self, args, save_path):
-        print("export torchscript...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
+    # def export_torchscript(self, args, save_path):
+    #     print("export torchscript...")
+    #     rand_input = torch.rand(1, 3, args.input_h, args.input_w).cuda()
+    # 
+    #     from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
+    # 
+    #     model = shufflenet_v2_x1_0(num_classes=args.classes)
+    #     model_path = args.data.replace("config", "models/checkpoint.pth.tar")
+    #     checkpoint = torch.load(model_path)
+    #     static_dict = checkpoint['state_dict']
+    #     model.load_state_dict(static_dict, strict=True)
+    #     model.cuda()
+    #     model.eval()
+    # 
+    #     torchscript = torch.jit.trace(model, rand_input, strict=False)
+    #     localtime = time.localtime(time.time())
+    #     date = "-".join([str(i) for i in localtime[0:3]])
+    # 
+    #     file_name = "{}_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
+    #                                                        str(args.classes), \
+    #                                                        str(args.input_w), \
+    #                                                        str(args.input_h), \
+    #                                                        date)
+    #     torchscript.save(os.path.join(save_path, file_name))
+    #     print("ok")
 
-        from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-        model.cuda()
-        model.eval()
-
-        torchscript = torch.jit.trace(model, rand_input, strict=False)
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.torchscript.pt".format(args.model_names, \
-                                                           str(args.classes), \
-                                                           str(args.input_w), \
-                                                           str(args.input_h), \
-                                                           date)
-        torchscript.save(os.path.join(save_path, file_name))
-        print("ok")
-
-    def export_onnx(self, args, save_path):
-        print("export onnx...")
-        rand_input = torch.rand(1, 3, args.input_h, args.input_w).cpu()
-
-        from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
-
-        model = shufflenet_v2_x1_0(num_classes=args.classes)
-        model_path = args.data.replace("config", "models/checkpoint.pth.tar")
-        checkpoint = torch.load(model_path)
-        static_dict = checkpoint['state_dict']
-        model.load_state_dict(static_dict, strict=True)
-        model.cpu()
-        model.eval()
-
-        localtime = time.localtime(time.time())
-        date = "-".join([str(i) for i in localtime[0:3]])
-
-        file_name = "{}_{}_{}x{}_{}.onnx".format(args.model_names, \
-                                                 str(args.classes), \
-                                                 str(args.input_w), \
-                                                 str(args.input_h), \
-                                                 date)
-        torch.onnx.export(model, rand_input, os.path.join(save_path, file_name), verbose=False, opset_version=12,
-                          input_names=['images'],
-                          output_names=['output'])
-
-        print("ok")
+    # def export_onnx(self, args, save_path):
+    #     print("export onnx...")
+    #     rand_input = torch.rand(1, 3, args.input_h, args.input_w).cpu()
+    # 
+    #     from export.shufflenetv2_segmantation import shufflenet_v2_x1_0
+    # 
+    #     model = shufflenet_v2_x1_0(num_classes=args.classes)
+    #     model_path = args.data.replace("config", "models/checkpoint.pth.tar")
+    #     checkpoint = torch.load(model_path)
+    #     static_dict = checkpoint['state_dict']
+    #     model.load_state_dict(static_dict, strict=True)
+    #     model.cpu()
+    #     model.eval()
+    # 
+    #     localtime = time.localtime(time.time())
+    #     date = "-".join([str(i) for i in localtime[0:3]])
+    # 
+    #     file_name = "{}_{}_{}x{}_{}.onnx".format(args.model_names, \
+    #                                              str(args.classes), \
+    #                                              str(args.input_w), \
+    #                                              str(args.input_h), \
+    #                                              date)
+    #     torch.onnx.export(model, rand_input, os.path.join(save_path, file_name), verbose=False, opset_version=12,
+    #                       input_names=['images'],
+    #                       output_names=['output'])
+    # 
+    #     print("ok")
