@@ -13,7 +13,29 @@ from loguru import logger
 from PIL import Image
 
 
-# TODO
+# 计算混淆矩阵
+def generate_matrix(classes, output, target):
+    with torch.no_grad():
+        target = target.squeeze(1).cpu().detach().numpy()
+        pred = output.argmax(1).cpu().detach().numpy()
+        mask = (target >= 0) & (target < classes)  # ground truth中所有正确(值在[0, classe_num])的像素label的mask
+        label = classes * target[mask].astype('int') + pred[mask]
+        # np.bincount计算了从0到n**2-1这n**2个数中每个数出现的次数，返回值形状(n, n)
+        count = np.bincount(label, minlength=classes ** 2)
+        confusion_matrix = count.reshape(classes, classes)  # (n, n)
+    return confusion_matrix
+
+
+def accl_miou(hist):
+    iou = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
+    miou = np.nanmean(iou)
+    return iou, miou
+
+
+def save_class_id_map(class_id_map_save_path: str, classes2idx: dict):
+    with open(class_id_map_save_path, 'w') as f:
+        f.writelines(['{}x{}\n'.format(v, k) for k, v in classes2idx.items()])
+
 
 def load_checkpoint(weight: str):
     checkpoint = torch.load(weight)
@@ -63,6 +85,7 @@ def save_weight(state_dict: dict, path: str):
 
 def get_time(fmt: str = '%Y-%m-%d-(%H:%M:%S)'):
     time_ = time.strftime(fmt, time.localtime())
+    # return 2022 - 11 - 14 - (17:35:42)
     return time_
 
 

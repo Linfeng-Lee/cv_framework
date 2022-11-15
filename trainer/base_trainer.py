@@ -38,7 +38,7 @@ class BaseTrainer(abc.ABC):
         self.writer = None
 
     def normalize_transpose(self, input):
-        pass
+        ...
 
     def init_trainer_v2(self,
                         args,
@@ -69,38 +69,6 @@ class BaseTrainer(abc.ABC):
         if isinstance(self.args.topk, (int, list, tuple)) is False:
             logger.error(f'args.topk type error,only support:(int,list, tuple) -> exit.')
             exit()
-
-    def init_trainer(self,
-                     model_names: str,
-                     lr: float,
-                     train_data_path: str,
-                     val_data_path: str,
-                     train_transforms,
-                     val_transforms,
-                     gpus: int,
-                     classes: int,
-                     batch_size: int,
-                     workers: int,
-                     criterion_list: list = None,
-                     tensorboard_save_path: str = 'temp/tensorboard',
-                     pretrained: bool = False,
-                     **kwargs):
-        self.args = kwargs["args"]
-        self.model_ = self.create_model(model_names, pretrained, num_classes=classes).cuda(gpus)
-        self.optimizer_ = self.define_optimizer(lr)
-        self.train_loader_ = self.define_loader(train_data_path,
-                                                train_transforms,
-                                                batch_size=batch_size,
-                                                num_workers=workers,
-                                                shuffle=True)
-        self.val_loader_ = self.define_loader(val_data_path,
-                                              val_transforms,
-                                              batch_size=batch_size,
-                                              num_workers=workers,
-                                              shuffle=True)
-        self.lr_scheduler_ = self.define_lr_scheduler(self.optimizer_)
-        self.criterion = self.define_criterion(criterion_list, gpus)
-        self.writer = self.define_scalar(tensorboard_save_path, comment=self.optimizer_.__module__)
 
     def create_model(self, model_names: str, pretrained: bool, **kwargs):
         model = network.__dict__[model_names](pretrained=pretrained, **kwargs)

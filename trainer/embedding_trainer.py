@@ -21,7 +21,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 import network
 from utils.meter import AverageMeter
 from utils.meter import ProgressMeter
-from utils.util import accuracy
+from utils.util import accuracy, load_weight
 from utils.util import get_key
 from utils.util import make_dir
 from utils.util import vis_maps
@@ -150,11 +150,21 @@ class EmbeddingTrainer(abc.ABC):
             checkpoint = torch.load(model_path)
             static_dict = checkpoint['state_dict']
             self.model_.load_state_dict(static_dict, strict=strict)
+
+            self.load_loss(model_path, strict)
+
+            logger.success(f"{model_path} 权重resume成功。")
+        else:
+            logger.warning("f{model_path} 权重文件不存在。")
+
+    def load_loss(self, model_path: str, strict: bool = False):
+        if os.path.exists(model_path):
+            checkpoint = torch.load(model_path)
             center_loss_para = checkpoint['center_loss']
             self.center_loss.load_state_dict(center_loss_para, strict=strict)
-            print("{} 权重resume成功。".format(model_path))
+            logger.success(f"loss params loading success.")
         else:
-            print("{} 权重文件不存在。".format(model_path))
+            logger.warning(f"{model_path} 权重文件不存在。")
 
     def save_checkpoint(self, state: dict, is_best: bool, save_path: str = "temp/weights"):
         filename = os.path.join(save_path, "checkpoint.pth.tar")

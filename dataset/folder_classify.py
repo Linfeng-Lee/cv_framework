@@ -1,5 +1,5 @@
-import os,os.path
-from typing import Any, Callable,Dict, List, Optional, Tuple
+import os, os.path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from dataset.folder_base import VisionDatasetBase
 from dataset.folder_base import IMG_EXTENSIONS
@@ -56,7 +56,7 @@ class DatasetFolder(VisionDatasetBase):
                 msg += "Supported extensions are: {}".format(",".join(extensions))
             raise RuntimeError(msg)
         if loader is None:
-            self.loader=self.default_loader
+            self.loader = self.default_loader
         else:
             self.loader = loader
         # self.loader = loader
@@ -69,11 +69,11 @@ class DatasetFolder(VisionDatasetBase):
 
     # @staticmethod
     def make_dataset(self,
-        directory: str,
-        class_to_idx: Dict[str, int],
-        extensions: Optional[Tuple[str, ...]] = None,
-        is_valid_file: Optional[Callable[[str], bool]] = None,
-    ) -> List[Tuple[str, int]]:
+                     directory: str,
+                     class_to_idx: Dict[str, int],
+                     extensions: Optional[Tuple[str, ...]] = None,
+                     is_valid_file: Optional[Callable[[str], bool]] = None,
+                     ) -> List[Tuple[str, int]]:
         return self.make_dataset_base(directory, class_to_idx, extensions=extensions, is_valid_file=is_valid_file)
 
     def _find_classes(self, dir: str) -> Tuple[List[str], Dict[str, int]]:
@@ -89,8 +89,11 @@ class DatasetFolder(VisionDatasetBase):
         Ensures:
             No class is a subdirectory of another.
         """
+        # classes=[classes1,classes2,...]
         classes = [d.name for d in os.scandir(dir) if d.is_dir()]
         classes.sort()
+
+        # class_to_idx={classes1:0,classes:1,...}
         class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         return classes, class_to_idx
 
@@ -109,11 +112,11 @@ class DatasetFolder(VisionDatasetBase):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-
         return sample, target
 
     def __len__(self) -> int:
         return len(self.samples)
+
 
 class ImageFolder(DatasetFolder):
     """A generic config loader where the images are arranged in this way: ::
@@ -150,7 +153,9 @@ class ImageFolder(DatasetFolder):
             loader: Callable[[str], Any] = None,
             is_valid_file: Optional[Callable[[str], bool]] = None,
     ):
-        super(ImageFolder, self).__init__(root, loader, IMG_EXTENSIONS if is_valid_file is None else None,
+        super(ImageFolder, self).__init__(root,
+                                          loader,
+                                          IMG_EXTENSIONS if is_valid_file is None else None,
                                           transform=transform,
                                           target_transform=target_transform,
                                           is_valid_file=is_valid_file)

@@ -5,6 +5,7 @@ import cv2
 from tqdm import tqdm
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import sys
+
 sys.path.append('/home/lee/PycharmProjects/cv_framework/augment')
 from augment import aug_transforms
 from augment import aug_config
@@ -142,7 +143,7 @@ class DatasetFolder(VisionDatasetBase):
 
         return t_data_list, classes, class_to_count, class_to_idx
 
-    def get_data_list(self, dir, extensions=None, is_valid_file=None):
+    def get_data_list(self, dir: str, extensions=None, is_valid_file=None):
         images = []
         dir = os.path.expanduser(dir)
 
@@ -152,6 +153,7 @@ class DatasetFolder(VisionDatasetBase):
             for file in fileNames:
                 if file.split('.')[-1].lower() in {"png", 'bmp', 'jpg', 'jpeg'}:
                     file = os.path.join(dirPath, file)
+                    # e.g.images=[xxx/1.jpg,xxx/2.jpg,...]
                     images.append(file)
         random.shuffle(images)
         return images
@@ -180,7 +182,11 @@ class DatasetFolder(VisionDatasetBase):
             classes = [d.name for d in os.scandir(dir) if d.is_dir()]
         else:
             classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
+
+        # classes=[classes1,classes2,...]
+
         classes.sort()
+        # clases_to_idx={classes1:0,classes2:1,...}
         class_to_idx = {classes[i]: i for i in range(len(classes))}
 
         return classes, class_to_idx

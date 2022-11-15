@@ -1,6 +1,5 @@
-
-import os,sys,random
-from typing import Tuple,Any
+import os, sys, random
+from typing import Tuple, Any
 
 import numpy as np
 from torch.utils.data.sampler import BatchSampler
@@ -9,6 +8,8 @@ from PIL import Image
 from torchvision.datasets.vision import VisionDataset
 
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif', '.tiff', '.webp')
+
+
 def get_nums_of_class(dir):
     '''
     用来获取训练目录下的每个类别的样本扥数据量
@@ -40,6 +41,7 @@ def get_nums_of_class(dir):
 
     return num_of_class
 
+
 def save_class_id_map(class_id_map_save_path, ds):
     '''
     保存深度网络的训练id
@@ -47,8 +49,11 @@ def save_class_id_map(class_id_map_save_path, ds):
     :param ds:
     :return:
     '''
-    with open(class_id_map_save_path, 'w')as f:
+    with open(class_id_map_save_path, 'w') as f:
+        # classes_to_idx=classes1:0,classes1:1,...
+        # classes_id_map = 0xclasses1,1xclasses2,...
         f.writelines(['{}x{}\n'.format(v, k) for k, v in ds.class_to_idx.items()])
+
 
 class BalancedBatchSampler(BatchSampler):
     def __init__(self, labels, n_classes, n_samples):
@@ -86,9 +91,10 @@ class BalancedBatchSampler(BatchSampler):
     def __len__(self):
         return self.n_dataset // self.batch_size
 
+
 class VisionDatasetBase(VisionDataset):
 
-    def load_class_id_map(self,conf):
+    def load_class_id_map(self, conf) -> dict:
         """
         加载网络输出id的映射
         :param conf:
@@ -96,15 +102,19 @@ class VisionDatasetBase(VisionDataset):
         """
         if not os.path.exists(conf.class_id_map_path):
             return dict()
+
         class_id_map = dict()
         with open(conf.class_id_map_path, "r") as f:
             for line in f.readlines():
                 line = line.strip()
+                # k=0,1,2,...s
+                # v=classes1,classes2,...
                 k, v = line.split("x")
+                # class_id_map={0:"classes1",1:"classes2",...}
                 class_id_map[k] = v
         return class_id_map
 
-    def has_file_allowed_extension(self,filename: str, extensions: Tuple[str, ...]) -> bool:
+    def has_file_allowed_extension(self, filename: str, extensions: Tuple[str, ...]) -> bool:
         """Checks if a file is an allowed extension.
 
         Args:
@@ -116,8 +126,7 @@ class VisionDatasetBase(VisionDataset):
         """
         return filename.lower().endswith(extensions)
 
-
-    def is_image_file(self,filename: str) -> bool:
+    def is_image_file(self, filename: str) -> bool:
         """Checks if a file is an allowed image extension.
 
         Args:
@@ -128,40 +137,50 @@ class VisionDatasetBase(VisionDataset):
         """
         return self.has_file_allowed_extension(filename, IMG_EXTENSIONS)
 
-
-    def make_dataset_base(self,dir, class_to_idx, extensions=None, is_valid_file=None, nums_of_class=None):
+    def make_dataset_base(self,
+                          dir,
+                          class_to_idx: dict,
+                          extensions=None,
+                          is_valid_file=None,
+                          nums_of_class=None):
         images = []
         dir = os.path.expanduser(dir)
         if not ((extensions is None) ^ (is_valid_file is None)):
             raise ValueError("Both extensions and is_valid_file cannot be None or not None at the same time")
+
         if extensions is not None:
             def is_valid_file(x):
                 return self.has_file_allowed_extension(x, extensions)
 
+        # target:classes0,classes1,...(low->high)
         for target in sorted(class_to_idx.keys()):
+
+            # dir=/home/user/data/xxx
+            # d=/home/user/data/xxx/classes1
             d = os.path.join(dir, target)
             if not os.path.isdir(d):
                 continue
+
             index = 0
             for dirPath, dirNames, fileNames in os.walk(d):
                 for file in fileNames:
                     if file.split('.')[-1].lower() in {"png", 'bmp', 'jpg', 'jpeg'}:
                         file = os.path.join(dirPath, file)
-                        item=(file,class_to_idx[target])
+                        item = (file, class_to_idx[target])
+                        # images=[('xxx/xxx.jpg',1),(xxx/xxx.jpg,0),...]
                         images.append(item)
 
         random.shuffle(images)
         return images
 
-    def pil_loader(self,path: str) -> Image.Image:
+    def pil_loader(self, path: str) -> Image.Image:
         # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
         with open(path, 'rb') as f:
             img = Image.open(f)
             return img.convert('RGB')
 
-
     # TODO: specify the return type
-    def accimage_loader(self,path: str) -> Any:
+    def accimage_loader(self, path: str) -> Any:
         import accimage
         try:
             return accimage.Image(path)
@@ -169,16 +188,13 @@ class VisionDatasetBase(VisionDataset):
             # Potentially a decoding problem, fall back to PIL.Image
             return self.pil_loader(path)
 
-
-    def default_loader(self,path: str) -> Any:
+    def default_loader(self, path: str) -> Any:
         from torchvision import get_image_backend
         if get_image_backend() == 'accimage':
             return self.accimage_loader(path)
         else:
             return self.pil_loader(path)
 
+
 def de_preprocess(tensor):
     return tensor * 0.5 + 0.5
-
-
-

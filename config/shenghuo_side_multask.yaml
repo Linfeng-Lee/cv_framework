@@ -1,0 +1,51 @@
+project                       : shenghuo_side
+net                           : multi_task_shufflenetplus_v2_x1_0
+task_type                     : mul_task
+
+classes                       : 15
+data_root                     : '/home/lee/data/shenghuoside'
+input_w                       : 256
+input_h                       : 256
+batch_size                    : 128
+start_epoch                   : 0
+epochs                        : 100
+balance_n_classes             : 15
+balance_n_samples             : 4
+resume                        : 
+device                        : gpu
+workers                       : 8
+seed                          : 0
+lr                            : 0.004
+criterion_list                : [ CrossEntropyLoss", PeriodLoss ]
+threshold                     : 0.5
+gpus                          : 0
+class_weight                  : []
+#class_weight                 : [ 0.56,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04,0.04 ]
+print_freq                    : 10
+save_freq                     : 100
+cycle_train_times             : 1
+area_threshold                : 100
+train_outputs                 : [ 0 ]
+score_threshold               : 0.1
+remove_no_json_sample_flag    : False
+convert_no_json_sample_flag   : False
+convert_float_flag            : False
+class_id_map_save_path        : temp/class_id_map.txt
+period_n_min                  : 10000
+asymmetry_id                  : False
+judge_cycle_train             : False
+topk                          : 2
+augment:
+  crop                        : False
+  change_colorspace           : True
+  contrast_normalization      : True
+  gaussian_noise              : False
+  multiply                    : True
+  scale                       : True
+  rotate                      : True
+  shear                       : False
+  grayscale                   : False
+  hue_and_saturation          : True
+  flip_left_right             : False
+  flip_up_down                : True
+

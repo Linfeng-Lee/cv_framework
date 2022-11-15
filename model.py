@@ -10,11 +10,19 @@ from augment.transforms_keypoints import AugKeypoints
 from augment.aug_config import config_aug
 from utils.util import get_balance_weight, auto_mkdir_project, load_aug_config, display_config
 
-from trainer.base_trainer import BaseTrainer
-from trainer.segmentation_trainer import SegmantationTrainer
-from trainer.embedding_trainer import EmbeddingTrainer
-from trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
-from trainer.multi_task_trainer import MultiTaskTrainer
+from trainer.multi_label_classify import MultiLabelClassifyTrainer
+from trainer.embedding import EmbeddingTrainer
+from trainer.classification import ClassificationTrainer
+from trainer.multi_task import MultiTaskTrainer
+from trainer.segmentation import SegmentationTrainer
+
+_NetWork_ = {
+    'classification': ClassificationTrainer,
+    'embedding': EmbeddingTrainer,
+    'multi_label_classify': MultiLabelClassifyTrainer,
+    'segmentation': SegmentationTrainer,
+    'multi_task': MultiTaskTrainer,
+}
 
 
 class Model:
@@ -90,20 +98,6 @@ class Model:
                                          self.train_transform,
                                          self.val_transform,
                                          self.tensorboard_save_path)
-            # self.trainer.init_trainer(self.args.net,
-            #                           self.args.lr,
-            #                           self.train_data_path,
-            #                           self.val_data_path,
-            #                           self.train_transform,
-            #                           self.val_transform,
-            #                           self.args.gpus,
-            #                           self.args.classes,
-            #                           self.args.batch_size,
-            #                           self.args.worker,
-            #                           criterion_list=self.args.criterion_list,
-            #                           tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
-            #                           pretrained=False,
-            #                           args=self.args)
 
         elif self.args.task_type == "segmentation":
             from trainer.segmentation_trainer import SegmantationTrainer
@@ -112,62 +106,15 @@ class Model:
                                          self.tensor_transforms,
                                          self.keypoint_transforms,
                                          self.tensorboard_save_path)
-            # self.trainer.init_trainer(self.args.net,
-            #                           self.args.lr,
-            #                           self.train_data_path,
-            #                           self.val_data_path,
-            #                           self.args.gpus,
-            #                           self.args.classes,
-            #                           classify_transform=self.train_transform,
-            #                           criterion_list=self.args.criterion_list,
-            #                           tensorboard_save_path=os.path.join('project', self.args.project, 'runs'),
-            #                           tensor_transform=self.tensor_transforms,
-            #                           mask_transform=self.keypoint_transforms,
-            #                           balance_n_classes=self.args.balance_n_classes,
-            #                           balance_n_samples=self.args.balance_n_samples,
-            #                           class_id_map_save_path=self.args.class_id_map_save_path,
-            #                           remove_no_json_sample_flag=False,
-            #                           convert_float_flag=self.args.convert_float_flag,
-            #                           return_path=True,
-            #                           period_thresh=self.args.period_thresh,
-            #                           period_n_min=self.args.period_n_min,
-            #                           period_weights=self.period_weights,
-            #                           asymmetry_id=False,
-            #                           weight=self.args.class_weight,
-            #                           args=self.args)
 
         elif self.args.task_type == "multilabel-classification":
             from trainer.multi_label_classify_trainer import MultiLabelClassifyTrainer
             self.trainer = MultiLabelClassifyTrainer()
 
-            # TODO
             self.trainer.init_trainer_v2(self.args,
                                          self.train_transform,
                                          self.tensor_transforms,
                                          self.tensorboard_save_path)
-            # self.trainer.init_trainer(self.args.net,
-            #                           self.args.lr,
-            #                           self.train_data_path,
-            #                           self.val_data_path,
-            #                           self.args.gpus,
-            #                           self.args.classes,
-            #                           classify_transform=self.train_transform,
-            #                           criterion_list=self.args.criterion_list,
-            #                           tensorboard_save_path=os.path.join(self.ROOT, self.args.project, 'runs'),
-            #                           tensor_transform=self.tensor_transforms,
-            #                           balance_n_classes=self.args.balance_n_classes,
-            #                           balance_n_samples=self.args.balance_n_samples,
-            #                           class_id_map_save_path=self.args.class_id_map_save_path,
-            #                           remove_no_json_sample_flag=False,
-            #                           convert_float_flag=self.args.convert_float_flag,
-            #                           return_path=True,
-            #                           period_n_min=self.args.period_n_min,
-            #                           weights=None,
-            #                           pos_weights=None,
-            #                           asymmetry_id=False,
-            #                           mask_classes=self.args.classes,
-            #                           epoches=self.args.epochs,
-            #                           args=self.args)
 
         elif self.args.task_type == "embedding-classification":
             from trainer.embedding_trainer import EmbeddingTrainer
@@ -178,23 +125,10 @@ class Model:
                                          self.val_transform,
                                          self.tensorboard_save_path)
 
-            # self.trainer.init_trainer(self.args.net,
-            #                           self.args.lr,
-            #                           self.train_data_path,
-            #                           self.val_data_path,
-            #                           self.train_transform,
-            #                           self.val_transform,
-            #                           self.args.gpus,
-            #                           self.args.classes,
-            #                           self.args.batch_size,
-            #                           self.args.worker,
-            #                           tensorboard_save_path=tensorboard_save_path,
-            #                           criterion_list=self.args.criterion_list,
-            #                           pretrained=True,
-            #                           args=self.args)
 
         elif self.args.task_type == "multitask":
-            raise NotImplementedError
+            network = _NetWork_[self.args.task_type]
+            self.trainer = network()
         else:
             raise NotImplementedError
 
@@ -211,10 +145,6 @@ class Model:
         self.trainer.resume(self.args.resume, strict=True)
 
         self.trainer.fit(save_path=save_path,
-                         # start_epoch=self.args.start_epoch,  # ignore
-                         # epochs=self.args.epochs,  # ignore
-                         # top_k=self.args.topk,  # ignore
-                         # args=self.args,  # ignore
                          normalize_transpose=self.normalize_transpose)
 
         logger.info(f'{self.args.net} end train.')
