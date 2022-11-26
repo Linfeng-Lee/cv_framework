@@ -198,3 +198,8 @@ class VisionDatasetBase(VisionDataset):
 
 def de_preprocess(tensor):
     return tensor * 0.5 + 0.5
+
+
+if __name__ == '__main__':
+    a = '/home/lee/data/image.png'
+    print(a.lower().endswith('png'))

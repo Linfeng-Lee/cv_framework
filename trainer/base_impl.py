@@ -29,27 +29,32 @@ class ImplBaseTrainer(BaseTrainer, ABC):
         self.criterion = None
         self.writer = None
         self.losses = None
+        self.scaler = None
 
     def create_model(self, model_names: str, pretrained: bool, **kwargs):
         model = network.__dict__[model_names](pretrained=pretrained, **kwargs)
         return model
 
-    def resume(self, model_path: str, strict: bool = False, **kwargs) -> None:
+    def resume(self, model_path: str, strict: bool = False, map_location: str = 'cpu', **kwargs) -> None:
+
         if os.path.exists(model_path):
-            checkpoint = torch.load(model_path)
-            static_dict = checkpoint['state_dict']
-            self.model_.load_state_dict(static_dict, strict=strict)
+            checkpoint = torch.load(model_path, map_location=map_location)
+
+            self.model_.load_state_dict(checkpoint.get('state_dict'), strict=strict)
+            self.lr_scheduler_.load_state_dict(checkpoint.get('lr_scheduler'))
+            self.optimizer_.load_state_dict(checkpoint.get('optimizer'))
+            self.args.start_epoch = checkpoint.get('epoch') + 1
+
+            if self.args.amp:
+                self.scaler.load_state_dict(checkpoint.get('scaler'))
+
             print("{} 权重resume成功。".format(model_path))
         else:
             print("{} 权重文件不存在。".format(model_path))
 
-    def save_checkpoint(self, state, save_path: str, **kwargs) -> None:
+    def save_checkpoint(self, state_dict: dict, save_path: str, **kwargs) -> None:
 
-        save_str = "checkpoint.pth.tar"
-
-        losses = kwargs.get('losses')
-        if losses is not None:
-            save_str = f'loss:{losses}_' + save_str  # e.g.loss:0.001_checkpoint.pth.tar
+        save_str = "checkpoint.pth"
 
         curr_time = get_time()
         save_str = f'{curr_time}_' + save_str
@@ -60,12 +65,22 @@ class ImplBaseTrainer(BaseTrainer, ABC):
             os.makedirs(save_path)
             print("create path {} to save checkpoint.".format(save_path))
 
-        torch.save(state, filename)
+        save_dict = {
+            "epoch": kwargs.get('epoch'),
+            "state_dict": state_dict,
+            'lr_scheduler': kwargs.get('lr_scheduler'),
+            'optimizer': kwargs.get('optimizer'),
+            "best": kwargs.get('best'),
+        }
+        if self.args.amp:
+            save_dict['scaler'] = kwargs.get('amp'),
+
+        torch.save(save_dict, filename)
 
         is_best = kwargs.get('is_best')
         if is_best is not None:
             # e.g.2022-11-14-(17:35:42)_model_best.pth.tar
-            shutil.copyfile(filename, os.path.join(save_path, f"{curr_time}_model_best.pth.tar"))
+            shutil.copyfile(filename, os.path.join(save_path, f"{curr_time}_model_best.pth"))
 
     def define_scalar(self, save_path: str, comment: str, **kwargs):
         curr_time = get_time()

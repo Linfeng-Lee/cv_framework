@@ -16,7 +16,7 @@ from trainer.classification import ClassificationTrainer
 from trainer.multi_task import MultiTaskTrainer
 from trainer.segmentation import SegmentationTrainer
 
-_NetWork_ = {
+_Network_ = {
     'classification': ClassificationTrainer,
     'embedding': EmbeddingTrainer,
     'multi_label_classify': MultiLabelClassifyTrainer,
@@ -127,7 +127,7 @@ class Model:
 
 
         elif self.args.task_type == "multitask":
-            network = _NetWork_[self.args.task_type]
+            network = _Network_[self.args.task_type]
             self.trainer = network()
         else:
             raise NotImplementedError

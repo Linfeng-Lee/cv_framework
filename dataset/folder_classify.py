@@ -46,7 +46,8 @@ class DatasetFolder(VisionDatasetBase):
             target_transform: Optional[Callable] = None,
             is_valid_file: Optional[Callable[[str], bool]] = None,
     ) -> None:
-        super(DatasetFolder, self).__init__(root, transform=transform,
+        super(DatasetFolder, self).__init__(root,
+                                            transform=transform,
                                             target_transform=target_transform)
         classes, class_to_idx = self._find_classes(self.root)
         samples = self.make_dataset(self.root, class_to_idx, extensions, is_valid_file)
