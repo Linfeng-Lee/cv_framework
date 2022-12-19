@@ -7,6 +7,10 @@
 *.png
 *.jpeg
 *.jpg
+<<<<<<< HEAD
 
 .idea/
 *.xml
+=======
+.idea
+>>>>>>> 733243bfdd014b85ca005803511eccf72f999146
